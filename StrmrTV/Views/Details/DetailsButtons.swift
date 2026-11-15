@@ -144,17 +144,23 @@ private struct ResumeProgressFill: ViewModifier {
                 // The wash is blended normally, not added (plusLighter): on losing focus the
                 // platter fades from white to grey, and an added wash over the still-light
                 // platter flashed brighter than white. Crossfaded with the focused shade.
+                // Sized and offset explicitly: a negative padding here left the shade at the
+                // resting frame, so a ring of the grown platter showed round it when focused.
                 GeometryReader { geo in
+                    let grow = focused ? Self.focusGrowth : 0
+                    let width = geo.size.width + grow * 2
+                    let height = geo.size.height + grow * 2
                     ZStack {
                         Rectangle().fill(Color.white.opacity(0.22))
                             .opacity(focused ? 0 : 1)
                         Rectangle().fill(Color.black.opacity(0.14))
                             .opacity(focused ? 1 : 0)
                     }
-                    .frame(width: geo.size.width * min(fraction, 1))
+                    .frame(width: width * min(fraction, 1), height: height)
+                    .frame(width: width, height: height, alignment: .leading)
+                    .clipShape(Capsule())
+                    .offset(x: -grow, y: -grow)
                 }
-                .padding(focused ? -Self.focusGrowth : 0)
-                .clipShape(Capsule())
                 .animation(.easeOut(duration: 0.15), value: focused)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
