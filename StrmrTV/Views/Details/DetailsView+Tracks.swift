@@ -56,24 +56,28 @@ extension DetailsView {
 
     /// "English · E-AC-3 · Subtitles Off", for the picks or else what Play would pick.
     var tracksCaption: String {
-        guard let status = warmPrequeue?.status else { return String(localized: "Finding a source…") }
+        guard let tracks = selectedTracks else { return String(localized: "Finding a source…") }
+        let subtitle = tracks.subtitle.map { String(localized: "\($0) Subtitles") }
+            ?? String(localized: "Subtitles Off")
+        return [tracks.audio, subtitle].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// The tracks Play will use (the picks, else its defaults): the audio's "English · E-AC-3"
+    /// and the subtitles' language, nil when they're off. Nil until the prequeue resolves.
+    var selectedTracks: (audio: String?, subtitle: String?)? {
+        guard let status = warmPrequeue?.status else { return nil }
         let lists = status.trackLists
         let defaults = status.trackDefaults
         let overrides = currentPrequeueOverrides
-        var parts: [String] = []
+        var audioLabel: String?
         let audioIndex = overrides.audioTrack ?? defaults.audio
         if let audio = lists.audio.first(where: { $0.index == audioIndex }) ?? lists.audio.first {
-            parts.append(TrackLabels.language(audio.language))
             let codec = TrackLabels.format(audio.codec)
-            if !codec.isEmpty { parts.append(codec) }
+            audioLabel = [TrackLabels.language(audio.language), codec].filter { !$0.isEmpty }.joined(separator: " · ")
         }
         let subtitleIndex = overrides.subtitleTrack.map { $0 == ManualTrackOverrides.off ? nil : $0 } ?? defaults.subtitle
-        if let subtitle = lists.subtitles.first(where: { $0.index == subtitleIndex }) {
-            parts.append(String(localized: "\(TrackLabels.language(subtitle.language)) Subtitles"))
-        } else {
-            parts.append(String(localized: "Subtitles Off"))
-        }
-        return parts.joined(separator: " · ")
+        let subtitle = lists.subtitles.first(where: { $0.index == subtitleIndex })
+        return (audioLabel, subtitle.map { TrackLabels.language($0.language) })
     }
 
     /// Presents at once (an await first let the trailer's fade take focus and drop the
