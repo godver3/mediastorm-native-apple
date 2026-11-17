@@ -166,7 +166,7 @@ final class MobileDetailsModel: ObservableObject {
 
     var cast: [CastMember] {
         var seen = Set<Int>()
-        return (title?.credits?.cast ?? []).filter { seen.insert($0.id).inserted }.prefix(20).map { $0 }
+        return (title?.credits?.cast ?? []).filter { seen.insert($0.id).inserted }
     }
 
     // MARK: Loading

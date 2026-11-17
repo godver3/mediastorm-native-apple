@@ -78,10 +78,10 @@ extension DetailsView {
 
     var isKids: Bool { AppSession.shared.profile?.isKidsProfile == true }
 
-    /// The top-billed cast, as many as the Expo TV row shows.
+    /// The top-billed cast; the server already caps the list.
     var cast: [CastMember] {
         var seen = Set<Int>()
-        return (title?.credits?.cast ?? []).filter { seen.insert($0.id).inserted }.prefix(10).map { $0 }
+        return (title?.credits?.cast ?? []).filter { seen.insert($0.id).inserted }
     }
 
     func relatedIDs(_ row: RelatedRow) -> [String] {
