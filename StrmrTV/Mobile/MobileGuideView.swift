@@ -80,9 +80,9 @@ struct MobileGuideView: View {
             width = new
             scroll(to: anchor)
         }
-        .onAppear {
-            start = LiveStore.halfHour(Date()).addingTimeInterval(-min(max(store.guideHistory, 1800), 24 * 3600))
-        }
+        .onAppear { reach(back: store.guideHistory) }
+        // A category with catch-up channels (or more of them loading in) moves the left edge.
+        .onChange(of: store.guideHistory) { _, history in reach(back: history) }
         .onChange(of: LiveStore.halfHour(leadingTime)) { loadVisible(channels) }
         // On the ruler's right end, so it covers no programmes.
         .overlay(alignment: .topTrailing) { timeButtons }
@@ -96,6 +96,17 @@ struct MobileGuideView: View {
         let target = time ?? LiveStore.halfHour(Date()).addingTimeInterval(-900)
         position.scrollTo(x: max(0, target.timeIntervalSince(start) * scale))
         placed = true
+    }
+
+    /// Moves the grid's left edge back as far as catch-up reaches (half an hour to a day), and
+    /// re-scrolls so the same time stays on screen: the scroll offset is measured from `start`,
+    /// so changing it alone slides the view (a day's catch-up put it on yesterday).
+    private func reach(back history: TimeInterval) {
+        let new = LiveStore.halfHour(Date()).addingTimeInterval(-min(max(history, 1800), 24 * 3600))
+        guard new != start else { return }
+        let anchor = placed ? leadingTime : nil
+        start = new
+        scroll(to: anchor)
     }
 
     private func loadVisible(_ channels: [LiveChannel]) {
