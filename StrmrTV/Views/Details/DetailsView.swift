@@ -7,6 +7,7 @@ struct DetailsView: View {
 
     @ObservedObject var playback = PlaybackCoordinator.shared
     @ObservedObject var spoilers = SpoilerSettingsStore.shared
+    @ObservedObject var infoLineStore = DetailsInfoLineStore.shared
     @EnvironmentObject var watchlist: WatchlistStore
     @EnvironmentObject var customLists: CustomListsStore
     @EnvironmentObject var titles: TitleStateStore
@@ -254,6 +255,7 @@ struct DetailsView: View {
         // re-ran every destination on the stack, and two details pages prewarming in turn
         // never settled (a page opened from More Like This froze the app).
         .onAppear { playback.prewarm(target) }
+        .task { await infoLineStore.refresh() }
         .task { await load() }
         .onReceive(DeepLinkRouter.shared.$autoplayTitleID) { _ in autoplayIfRequested() }
         .onChange(of: playback.sessionsEnded) {
@@ -344,6 +346,10 @@ struct DetailsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .focusSection()
                 .defaultFocus($focus, .action(.primary), priority: .userInitiated)
+                .environment(\.hidesFocusCaptions, infoLineShown)
+
+            // In the focus captions' place (they hide while it shows).
+            infoLine.padding(.top, 2)
         }
     }
 

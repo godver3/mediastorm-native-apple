@@ -43,6 +43,7 @@ struct SettingsView: View {
         .task { await credits.refresh() }
         .task { await TrackSettingsStore.shared.refresh() }
         .task { await SpoilerSettingsStore.shared.refresh() }
+        .task { await DetailsInfoLineStore.shared.refresh() }
         .task { await BadgeSettingsStore.shared.refresh() }
         .confirmationDialog("Sign out of \(session.username ?? "this account")?", isPresented: $confirmSignOut) {
             Button("Sign Out", role: .destructive) { Task { await session.signOut() } }
@@ -134,6 +135,10 @@ struct SettingsView: View {
 
             Section("Spoilers") {
                 SpoilerSettingsRows()
+            }
+
+            Section("Details Page") {
+                DetailsInfoSettingsRows()
             }
 
             Section("Account") {

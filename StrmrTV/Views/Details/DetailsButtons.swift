@@ -114,8 +114,23 @@ struct DetailsButtonsSheet: View {
 extension View {
     /// A caption under a focused action button, as Versions and Audio & Subtitles show.
     func focusCaption(_ text: String?, shown: Bool) -> some View {
-        overlay(alignment: .bottom) {
-            if shown, let text {
+        modifier(FocusCaption(text: text, shown: shown))
+    }
+}
+
+extension EnvironmentValues {
+    /// Set while the details info line shows: it sits where the captions would.
+    @Entry var hidesFocusCaptions = false
+}
+
+private struct FocusCaption: ViewModifier {
+    let text: String?
+    let shown: Bool
+    @Environment(\.hidesFocusCaptions) private var hidden
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .bottom) {
+            if shown, !hidden, let text {
                 Text(text)
                     .font(.system(size: 22, weight: .medium)).foregroundStyle(.secondary)
                     .fixedSize()
