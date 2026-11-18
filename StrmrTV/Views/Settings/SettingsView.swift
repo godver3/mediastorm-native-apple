@@ -124,6 +124,7 @@ struct SettingsView: View {
                     .init(value: false, name: String(localized: "Off")),
                 ])
                     .accessibilityHint(Text("Moves to another source when the current one fails or keeps stalling"))
+                MatchContentRow()
                 TrackSettingsRows()
                 AtmosSettingsRows()
                 LiveHLSResetRow()
