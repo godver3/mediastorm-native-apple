@@ -15,6 +15,16 @@ struct MobileNetworkSettings: Codable, Equatable {
 
     var isConfigured: Bool { !homeWifiSSID.isEmpty && (!homeBackendURL.isEmpty || !remoteBackendURL.isEmpty) }
 
+    /// Whether `ssid` is a home network. The field may list several names separated by commas
+    /// (all sharing the one home address); case is ignored. The whole field also matches, for a
+    /// name that itself contains a comma.
+    static func isHome(ssid: String, homeWifiSSID: String) -> Bool {
+        ssid.caseInsensitiveCompare(homeWifiSSID) == .orderedSame
+            || homeWifiSSID.split(separator: ",").contains {
+                $0.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(ssid) == .orderedSame
+            }
+    }
+
     /// The home address as a base URL (no `/api`), unless it is missing or a loopback.
     var homeURL: URL? { Self.address(homeBackendURL) }
     var remoteURL: URL? { Self.address(remoteBackendURL) }

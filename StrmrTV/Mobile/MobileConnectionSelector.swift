@@ -128,7 +128,7 @@ final class MobileConnectionSelector: ObservableObject {
             Self.saveDetection(home: nil)
             target = settings.remoteURL
         } else if let ssid {
-            let home = ssid.caseInsensitiveCompare(settings.homeWifiSSID) == .orderedSame
+            let home = MobileNetworkSettings.isHome(ssid: ssid, homeWifiSSID: settings.homeWifiSSID)
             isHomeNetwork = home
             Self.saveDetection(home: home)
             target = home ? settings.homeURL : settings.remoteURL
@@ -150,7 +150,8 @@ final class MobileConnectionSelector: ObservableObject {
         guard MobileNetworkMonitor.shared.path.interface != .cellular else { lastSSID = nil; return false }
         let ssid = await MobileWiFiSSID.shared.current()
         lastSSID = ssid
-        return ssid == nil || ssid?.caseInsensitiveCompare(homeSSID) == .orderedSame
+        guard let ssid else { return true }
+        return MobileNetworkSettings.isHome(ssid: ssid, homeWifiSSID: homeSSID)
     }
 
     // MARK: Detection cache
