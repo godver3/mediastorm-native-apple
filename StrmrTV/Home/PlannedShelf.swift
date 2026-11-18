@@ -120,7 +120,9 @@ struct PlannedShelf: Identifiable, Sendable {
         switch source {
         case .continueWatching:
             var items = try await context.continueWatching()
-            if settings.excludeUpcomingFromContinue { items = items.filter { !$0.isUpcoming } }
+            // Unaired next episodes go to My Upcoming, or, when the profile keeps them here,
+            // stay only while they air within the week (as the Expo app's "coming soon").
+            items = items.filter { !$0.isUpcoming || (!settings.excludeUpcomingFromContinue && $0.airsSoon) }
             return row(items.map(HomeCard.init), list: .continueWatching)
 
         case .upcoming:
@@ -281,6 +283,13 @@ extension HomeShelf {
 extension ContinueWatchingItem {
     /// A show whose next episode hasn't aired yet.
     var isUpcoming: Bool { !isMovie && airs > .now }
+
+    /// How far ahead an unaired next episode can be and still show in Continue Watching
+    /// (Expo's `COMING_SOON_WINDOW_DAYS`).
+    static let upcomingWindow: TimeInterval = 7 * 24 * 60 * 60
+
+    /// Airs within `upcomingWindow`.
+    var airsSoon: Bool { airs <= Date.now.addingTimeInterval(Self.upcomingWindow) }
 
     /// When the next episode airs; distant past when unknown (already watchable).
     var airs: Date {

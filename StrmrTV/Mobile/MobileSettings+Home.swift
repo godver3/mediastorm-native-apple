@@ -9,6 +9,7 @@ struct MobileHomeRowsSettingsView: View {
     @ObservedObject private var layout = HomeLayoutStore.shared
     @ObservedObject private var style = HomeStyleStore.shared
     @ObservedObject private var shelfOrder = ShelfOrderStore.shared
+    @ObservedObject private var upcoming = UpcomingSettingsStore.shared
 
     var body: some View {
         Form {
@@ -23,6 +24,17 @@ struct MobileHomeRowsSettingsView: View {
                 Text("Top of Home")
             } footer: {
                 Text("A carousel of one row's titles at the top of Home; that row isn't repeated below.")
+            }
+            Section {
+                MobileOverridePicker("Upcoming Episodes", selection: $upcoming.showInContinueWatching,
+                                     defaultValue: upcoming.profileShows, choices: [
+                                         .init(value: true, name: String(localized: "Shown")),
+                                         .init(value: false, name: String(localized: "Hidden")),
+                                     ])
+            } header: {
+                Text("Continue Watching")
+            } footer: {
+                Text(UpcomingSettingsStore.footer)
             }
             Section {
                 if layout.shelves.isEmpty {

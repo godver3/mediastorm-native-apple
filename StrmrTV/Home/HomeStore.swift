@@ -165,7 +165,7 @@ final class HomeStore: ObservableObject {
             rows[shelf.id] = shelf.watchlistRow(watchlist, settings: settings)
         }
         let planned = planned.filter { $0.source != .watchlist }
-        let context = HomeContext(settings: settings, plan: planned)
+        let context = HomeContext(settings: settings.applyingDeviceUpcoming(), plan: planned)
         revealed = !slots.isEmpty
         revealDue = false
         // A row already showing cards reloads straight to its complete form, so a refresh

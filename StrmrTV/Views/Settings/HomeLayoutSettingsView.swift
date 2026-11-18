@@ -6,6 +6,7 @@ struct HomeLayoutSettingsView: View {
     @ObservedObject private var layout = HomeLayoutStore.shared
     @ObservedObject private var style = HomeStyleStore.shared
     @ObservedObject private var shelfOrder = ShelfOrderStore.shared
+    @ObservedObject private var upcoming = UpcomingSettingsStore.shared
 
     var body: some View {
         Form {
@@ -41,6 +42,15 @@ struct HomeLayoutSettingsView: View {
                 Text("Views")
             } footer: {
                 Text("A button on Home that switches it between All, Movies, Shows and your pages. Not shown while every view has its own tab in Settings › Menu.")
+            }
+
+            Section {
+                OverridePicker("Upcoming Episodes", selection: $upcoming.showInContinueWatching, options: [true, false],
+                               profileValue: upcoming.profileShows) { $0 ? "Shown" : "Hidden" }
+            } header: {
+                Text("Continue Watching")
+            } footer: {
+                Text(UpcomingSettingsStore.footer)
             }
 
             Section {
