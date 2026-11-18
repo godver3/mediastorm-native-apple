@@ -13,13 +13,36 @@ enum Keychain {
         ]
     }
 
-    static func read(_ account: String) -> Data? {
+    /// A read that tells a missing item apart from one that couldn't be read. The second
+    /// (e.g. `errSecInteractionNotAllowed` before data protection is available) says nothing
+    /// about whether the item exists, so callers must not treat it as "nothing saved".
+    enum Lookup {
+        case found(Data)
+        case notFound
+        case failed(OSStatus)
+    }
+
+    static func lookup(_ account: String) -> Lookup {
         var q = query(account)
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: AnyObject?
-        guard SecItemCopyMatching(q as CFDictionary, &result) == errSecSuccess else { return nil }
-        return result as? Data
+        let status = SecItemCopyMatching(q as CFDictionary, &result)
+        switch status {
+        case errSecSuccess:
+            guard let data = result as? Data else { return .failed(errSecDecode) }
+            return .found(data)
+        case errSecItemNotFound:
+            return .notFound
+        default:
+            return .failed(status)
+        }
+    }
+
+    /// The item's data, or nil when it is missing or unreadable (see `lookup` to tell which).
+    static func read(_ account: String) -> Data? {
+        if case let .found(data) = lookup(account) { return data }
+        return nil
     }
 
     @discardableResult

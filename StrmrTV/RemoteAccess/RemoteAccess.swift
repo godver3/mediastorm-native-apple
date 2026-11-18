@@ -24,13 +24,51 @@ final class RemoteAccess {
     }
 
     private(set) var pairing: Pairing?
+    /// Why `pairing` is nil although one may be saved: the Keychain read failed or the saved
+    /// item didn't decode. Such a launch is not "unpaired", so nothing may forget the pairing
+    /// on its account; `reload()` tries again.
+    private(set) var loadProblem: String?
     private var connecting: Task<URL, Error>?
     private var pathMonitor: NWPathMonitor?
 
     private static let keychainAccount = "remoteAccess"
 
     private init() {
-        pairing = Keychain.read(Self.keychainAccount).flatMap { try? JSONDecoder().decode(Pairing.self, from: $0) }
+        reload()
+    }
+
+    /// Reads the saved pairing when none is loaded; true once one is in hand.
+    @discardableResult
+    func reload() -> Bool {
+        guard pairing == nil else { return true }
+        switch Keychain.lookup(Self.keychainAccount) {
+        case let .found(data):
+            if let saved = try? JSONDecoder().decode(Pairing.self, from: data) {
+                if loadProblem != nil { log.notice("saved pairing read after an earlier failure") }
+                pairing = saved
+                loadProblem = nil
+                return true
+            }
+            loadProblem = "the saved pairing didn't decode (\(data.count) bytes)"
+        case .notFound:
+            loadProblem = nil
+            return false
+        case let .failed(status):
+            loadProblem = "the Keychain read failed (OSStatus \(status))"
+        }
+        log.error("remote access pairing not loaded: \(loadProblem ?? "")")
+        return false
+    }
+
+    /// At launch, a pairing that couldn't be read (as opposed to a missing one) gets a few
+    /// more reads a second apart before startup gives up on it for now, keeping it saved.
+    func retryUnreadablePairing() async {
+        guard pairing == nil, loadProblem != nil else { return }
+        for _ in 0..<5 {
+            try? await Task.sleep(for: .seconds(1))
+            if reload() || loadProblem == nil { return }
+        }
+        log.error("startup: keeping the saved pairing unread; \(loadProblem ?? "")")
     }
 
     // MARK: Pairing
@@ -48,8 +86,11 @@ final class RemoteAccess {
         try await prime(base, credential: credential)
         try await claim(code: code, credential: credential, base: base)
         let pairing = Pairing(invite: invite, credential: credential, connectionCode: code)
-        if let data = try? JSONEncoder().encode(pairing) { Keychain.write(data, account: Self.keychainAccount) }
+        if let data = try? JSONEncoder().encode(pairing), !Keychain.write(data, account: Self.keychainAccount) {
+            log.error("paired, but the pairing couldn't be saved to the Keychain; it lasts until the app quits")
+        }
         self.pairing = pairing
+        loadProblem = nil
         startPathMonitor()
         log.info("paired; proxy at \(base.absoluteString)")
         return base
@@ -80,9 +121,12 @@ final class RemoteAccess {
         return base
     }
 
-    /// Unpairs this device (Change Server, sign-out of a remote server).
-    func forget() {
+    /// Unpairs this device (Change Server, sign-out of a remote server). The reason is logged,
+    /// so a report of a lost pairing shows what dropped it.
+    func forget(reason: String) {
+        log.notice("forgetting the remote access pairing (\(pairing == nil ? "none loaded" : "paired")): \(reason)")
         pairing = nil
+        loadProblem = nil
         Keychain.delete(Self.keychainAccount)
         pathMonitor?.cancel()
         pathMonitor = nil

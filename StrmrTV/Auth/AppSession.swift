@@ -97,8 +97,9 @@ final class AppSession: ObservableObject {
 
     func start() async {
         #if DEBUG
-        if DebugPrefill.resetSession { forgetEverything() }
+        if DebugPrefill.resetSession { forgetEverything(reason: "debug reset") }
         #endif
+        await RemoteAccess.shared.retryUnreadablePairing()
         if RemoteAccess.shared.pairing != nil {
             await startRemote()
         } else if let saved = defaults.url(forKey: Key.serverURL) {
@@ -112,9 +113,13 @@ final class AppSession: ObservableObject {
             } else {
                 phase = .login
             }
+        } else if RemoteAccess.shared.loadProblem != nil {
+            // Never unpair over a failed read: the code was taken off the DHT when it was
+            // claimed, so a forgotten pairing can only come back with a new code.
+            phase = .unavailable(String(localized: "Couldn't read this device's remote access pairing. Try again."))
         } else {
             // Keychain items outlive an uninstall; a token without a server is stale.
-            forgetEverything()
+            forgetEverything(reason: "startup found no saved server or pairing")
             phase = .server
         }
         #if DEBUG
@@ -159,7 +164,7 @@ final class AppSession: ObservableObject {
             throw APIError.notReady(String(localized: "Enter a server address, like 192.168.1.10 or media.example.com."))
         }
         try await api.checkHealth(of: url)
-        if isRemote || isHomeDirect { leaveRemote() }
+        if isRemote || isHomeDirect { leaveRemote(reason: "connected to a server address") }
         if url != serverURL {
             await api.logout()
             defaults.removeObject(forKey: Key.lastProfileID)
@@ -236,8 +241,8 @@ final class AppSession: ObservableObject {
         try? await reconnectRemoteOrThrow()
     }
 
-    private func leaveRemote() {
-        RemoteAccess.shared.forget()
+    private func leaveRemote(reason: String) {
+        RemoteAccess.shared.forget(reason: reason)
         isRemote = false
         isHomeDirect = false
         api.remoteCredential = nil
@@ -245,6 +250,11 @@ final class AppSession: ObservableObject {
 
     /// Try Again on the startup error: a remote launch that never connected starts over.
     func retryStartup() async {
+        // The pairing couldn't be read at launch: start over, which reads it again.
+        if RemoteAccess.shared.pairing == nil, RemoteAccess.shared.loadProblem != nil {
+            await start()
+            return
+        }
         if isRemote || isHomeDirect, RemoteAccess.shared.pairing != nil { await startRemote() } else { await resumeSession() }
     }
 
@@ -376,8 +386,8 @@ final class AppSession: ObservableObject {
         Task { await api.reportDisplayCapabilities() }
     }
 
-    private func forgetEverything() {
-        leaveRemote()
+    private func forgetEverything(reason: String) {
+        leaveRemote(reason: reason)
         defaults.removeObject(forKey: Key.serverURL)
         defaults.removeObject(forKey: Key.lastProfileID)
         defaults.removeObject(forKey: Key.autoProfileID)
