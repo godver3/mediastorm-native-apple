@@ -192,7 +192,7 @@ final class PlayerViewController: EnginePlayerViewController {
             } catch is CancellationError {
                 return
             } catch {
-                fail("Playback failed: \(error.localizedDescription)")
+                failOrAutoSwitch("Playback failed: \(error.localizedDescription)")
             }
         }
     }
@@ -298,7 +298,7 @@ final class PlayerViewController: EnginePlayerViewController {
             if resumeWatch != nil {
                 exitToDetails(reason: "error after resume: \(message)")
             } else {
-                fail(message)
+                failOrAutoSwitch(message)
             }
         default:
             break

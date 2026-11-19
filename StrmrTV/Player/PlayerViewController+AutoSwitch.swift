@@ -4,8 +4,9 @@ import UIKit
 // MARK: Auto Switch
 //
 // Moves a movie or episode to the next ranked source by itself when the server reports this
-// one broken or too slow (`migrationRequested` on a progress reply), or `StallWatch` sees
-// playback stuck or stalling again and again. The next source is resolved while this one is
+// one broken or too slow (`migrationRequested` on a progress reply), `StallWatch` sees
+// playback stuck or stalling again and again, or the engine gives up on the source with an
+// error (`failOrAutoSwitch`) — a damaged file fails the same way on every retry. The next source is resolved while this one is
 // still up, then played from the same position with the same languages, as a Switch Source pick.
 // Sources already tried are carried on the request, so a switch never goes back to one; after
 // `autoSwitchLimit` switches it stops trying. Settings › Playback › Auto Switch Sources turns it off.
@@ -17,6 +18,8 @@ struct AutoSwitchState {
     var isSwitching = false
     /// Sources that failed to resolve on an earlier try from this player.
     var failed: Set<String> = []
+    /// A player error that arrived while a switch was already being tried: shown if it gives up.
+    var failureOnGiveUp: String?
 }
 
 extension PlayerViewController {
@@ -60,13 +63,17 @@ extension PlayerViewController {
     }
 
     /// Resolves the next untried source and switches to it; with none left, stays put.
-    func autoSwitch(because reason: String) {
+    /// Resolves the next untried source and switches to it; with none left, stays put and runs
+    /// `onGiveUp` (the error exit when the source already failed). Returns whether a try started —
+    /// false means the caller handles the failure itself, right away.
+    @discardableResult
+    func autoSwitch(because reason: String, onGiveUp: (() -> Void)? = nil) -> Bool {
         guard AutoSwitchSettingsStore.shared.enabled, !autoSwitchState.isSwitching, request.libraryVersion == nil,
-              !didFinish, !isAdvancing, !isExitingToDetails, !engine.isLive, !playsDownload else { return }
+              !didFinish, !isAdvancing, !isExitingToDetails, !engine.isLive, !playsDownload else { return false }
         guard request.autoSwitchCount < Self.autoSwitchLimit else {
             log.notice("auto switch: \(reason); already switched \(self.request.autoSwitchCount) times, staying")
             autoSwitchState.watch.reset()
-            return
+            return false
         }
         autoSwitchState.isSwitching = true
         var tried = request.autoSwitchTried.union(Self.keys(currentSource)).union(autoSwitchState.failed)
@@ -99,6 +106,24 @@ extension PlayerViewController {
             autoSwitchState.failed = tried
             autoSwitchState.watch.reset()
             autoSwitchState.isSwitching = false
+            onGiveUp?()
+            if let message = autoSwitchState.failureOnGiveUp {
+                autoSwitchState.failureOnGiveUp = nil
+                fail(message)
+            }
+        }
+        return true
+    }
+
+    /// A source the engine can't open or keep reading fails the same way on every retry (a
+    /// release with missing Usenet articles): try the next ranked source before giving up.
+    func failOrAutoSwitch(_ message: String) {
+        if autoSwitchState.isSwitching {
+            autoSwitchState.failureOnGiveUp = message
+            return
+        }
+        if !autoSwitch(because: "player error: \(message)", onGiveUp: { [weak self] in self?.fail(message) }) {
+            fail(message)
         }
     }
 
