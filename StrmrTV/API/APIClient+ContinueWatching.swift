@@ -1,6 +1,6 @@
 import Foundation
 
-/// Continue Watching, minus what the profile put aside, plus the hide action. Titles
+/// Continue Watching, minus what the profile put aside, plus the hide action and its undo. Titles
 /// hidden with `hideFromContinueWatching` are dropped server-side; the "Set Aside"
 /// custom list is filtered here, as the other clients do.
 extension APIClient {
@@ -21,6 +21,20 @@ extension APIClient {
         if DebugPrefill.dryRunHide { return }
         #endif
         try await sendRaw("POST", "\(profilePath)/history/continue/hide", jsonObject: ["seriesId": seriesID])
+        await MainActor.run { NotificationCenter.default.post(name: .continueWatchingChanged, object: nil) }
+    }
+
+    /// Titles hidden from Continue Watching, newest first, in the shape of the profile's
+    /// hidden items. Lossy, so one bad entry never costs the list.
+    func continueWatchingHidden() async throws -> [HiddenItem] {
+        let items: LossyArray<HiddenItem> = try await send("GET", "\(profilePath)/history/continue/hidden")
+        return items.elements
+    }
+
+    /// Undoes `hideFromContinueWatching`: the title is back in the row if it still
+    /// qualifies. Posts `continueWatchingChanged` so every view of the row reloads.
+    func unhideFromContinueWatching(seriesID: String) async throws {
+        try await sendRaw("POST", "\(profilePath)/history/continue/unhide", jsonObject: ["seriesId": seriesID])
         await MainActor.run { NotificationCenter.default.post(name: .continueWatchingChanged, object: nil) }
     }
 

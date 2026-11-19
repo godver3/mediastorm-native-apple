@@ -27,6 +27,11 @@ struct MobileSettingsView: View {
                     .padding(.vertical, 4)
                     .accessibilityElement(children: .combine)
                     Button("Switch Profile") { Task { await session.switchProfile() } }
+                    NavigationLink {
+                        MobileHiddenItemsView()
+                    } label: {
+                        Label("Hidden Items", systemImage: "eye.slash")
+                    }
                 }
             }
 
