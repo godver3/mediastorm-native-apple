@@ -33,12 +33,17 @@ extension LivePlayerViewController {
     func installProgrammeBar() {
         guard usesProgrammeBar else { return }
         showsPlaybackControls = false
+        #if os(iOS)
+        // The TV's HUD answers only the remote; touch gets the phone's controls (`+ProgrammeBarMobile`).
+        installMobileProgrammeBar()
+        #else
         hud.onFocusChange = { [weak self] in
             self?.setNeedsFocusUpdate()
             self?.updateFocusIfNeeded()
         }
         Self.fill(hud, in: view)
         view.insertSubview(hud, belowSubview: cover)
+        #endif
         scrub.ticker = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshProgrammeBar() }
         }
@@ -56,8 +61,20 @@ extension LivePlayerViewController {
 
     private var behindLive: TimeInterval { max(0, Date().timeIntervalSince(catchupPlayhead)) }
 
+    /// Shows the bar for a few seconds (a fresh tune, a seek).
+    func flashProgrammeBar() {
+        #if os(iOS)
+        mobileControls.flash()
+        #else
+        hud.flash()
+        #endif
+    }
+
     func refreshProgrammeBar() {
         guard usesProgrammeBar else { return }
+        #if os(iOS)
+        refreshMobileProgrammeBar()
+        #else
         let now = Date()
         let playhead = catchupPlayhead
         let at = scrub.target ?? playhead
@@ -72,11 +89,15 @@ extension LivePlayerViewController {
         hud.update(position: at.timeIntervalSince(program.start), duration: length, paused: isPaused)
         hud.setLive(airedFraction: now.timeIntervalSince(program.start) / length,
                     behind: max(0, now.timeIntervalSince(playhead)))
+        #endif
     }
 
     /// The row: Start Over and Go Live, then AVKit's items (Add Screen, Subtitles).
     func refreshProgrammeRow() {
         guard usesProgrammeBar else { return }
+        #if os(iOS)
+        refreshMobileProgrammeRow()
+        #else
         let startOver = UIAction(title: String(localized: "Start Over"), image: UIImage(systemName: "gobackward")) {
             [weak self] _ in self?.startOver()
         }
@@ -84,6 +105,7 @@ extension LivePlayerViewController {
             [weak self] _ in self?.programmeGoLive()
         }
         hud.setMenus([startOver, goLive] + transportBarCustomMenuItems)
+        #endif
     }
 
     // MARK: Remote

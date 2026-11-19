@@ -26,7 +26,7 @@ extension LivePlayerViewController {
     func hideCover() {
         cover.isHidden = true
         cover.show(note: nil)
-        if usesProgrammeBar { scrub.hud.flash() }
+        if usesProgrammeBar { flashProgrammeBar() }
     }
 
     /// The playhead as a wall-clock date: the archive's point, or now less how far behind live.

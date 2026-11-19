@@ -92,6 +92,8 @@ final class LivePlayerViewController: EnginePlayerViewController {
     // The phone's menu row over AVKit's chrome (`LivePlayer+Cast`).
     lazy var mobileControls = MobilePlayerControls(title: channel.name, subtitle: program?.title)
     lazy var mobileChromeTracker = MobileChromeVisibility(root: view, controls: mobileControls)
+    /// A catch-up channel's touch transport has its own close button (`+ProgrammeBarMobile`).
+    override var hasTouchTransport: Bool { usesProgrammeBar }
     #endif
 
     /// The menu entry for the server's captions; clear of every engine id.
