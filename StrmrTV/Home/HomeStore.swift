@@ -92,8 +92,12 @@ final class HomeStore: ObservableObject {
     // MARK: Loading
 
     /// Reloads the config and every row. Rows already shown stay until their new
-    /// cards arrive, so a reload never blanks the page.
-    func load() async {
+    /// cards arrive, so a reload never blanks the page. Runs on when the caller's task is
+    /// cancelled (a view's `.task` ends as the page leaves the screen): a row cut off
+    /// mid-fetch would otherwise stay a placeholder until the server's revision changes.
+    func load() async { await Task { await loadNow() }.value }
+
+    private func loadNow() async {
         loadsRunning += 1
         defer { loadsRunning -= 1 }
         loadGeneration += 1
@@ -152,7 +156,12 @@ final class HomeStore: ObservableObject {
         await loadRows(affected, generation: loadGeneration)
     }
 
+    /// Fetches rows; like `load`, outlives a cancelled caller.
     private func loadRows(_ planned: [PlannedShelf], generation: Int) async {
+        await Task { await fetchRows(planned, generation: generation) }.value
+    }
+
+    private func fetchRows(_ planned: [PlannedShelf], generation: Int) async {
         guard let settings, !planned.isEmpty else {
             publish()
             isLoading = false
@@ -242,6 +251,11 @@ final class HomeStore: ObservableObject {
             loads.forEach { $0.cancel() }
         }
         guard generation == loadGeneration else { return }
+        // A row that never answered (the fetch was cancelled) is retried on the next refresh.
+        for shelf in planned where loading.contains(shelf.id) && !calendarPending.contains(shelf.id) {
+            loading.remove(shelf.id)
+            if rows[shelf.id] == nil { failed.insert(shelf.id) }
+        }
         if pendingNow.isEmpty {
             if planned.contains(where: \.source.usesCalendar) { calendarRetries = 0 }
         } else {
@@ -378,21 +392,5 @@ final class HomeStore: ObservableObject {
         guard let row = rows[shelf] else { return }
         rows[shelf] = row.removing(card: id)
         publish()
-    }
-}
-
-/// Complete passes in flight across every Home view: each can take a while on a cold
-/// server and holds a connection, so only a few run at once.
-@MainActor
-private enum CompletionGate {
-    private static let limit = 4
-    private static var running = 0
-    private static var waiting: [CheckedContinuation<Void, Never>] = []
-
-    static func run<T>(_ work: () async throws -> T) async rethrows -> T {
-        if running < limit { running += 1 } else { await withCheckedContinuation { waiting.append($0) } }
-        // A finished pass hands its slot straight to the next waiting one.
-        defer { if waiting.isEmpty { running -= 1 } else { waiting.removeFirst().resume() } }
-        return try await work()
     }
 }
