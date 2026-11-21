@@ -125,6 +125,7 @@ final class PlayerViewController: EnginePlayerViewController {
         self.tracks = tracks
         self.previewsEnabled = previewsEnabled
         super.init(engine: engine, logCategory: "player")
+        audioOffsetKey = request.audioOffsetKey
     }
 
     override func viewDidLoad() {

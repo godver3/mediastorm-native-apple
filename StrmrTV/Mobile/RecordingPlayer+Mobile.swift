@@ -54,12 +54,16 @@ extension RecordingPlayerViewController {
         }
     }
 
-    /// Settings: Stream Info (the TV's swipe-down tab).
+    /// Settings: Stream Info (the TV's swipe-down tab) and Audio Offset.
     private func recordingSettingsMenu() -> UIMenu {
         let info = UIAction(title: String(localized: "Stream Info"), image: UIImage(systemName: "info.circle")) { [weak self] _ in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { self?.presentRecordingStreamInfo() }
         }
-        let menu = UIMenu(title: "", image: UIImage(systemName: "gearshape"), children: [info])
+        let offset = audioOffsetMenu { [weak self] in
+            guard let self else { return }
+            mobileControls.setMenus([recordingSettingsMenu()])
+        }
+        let menu = UIMenu(title: "", image: UIImage(systemName: "gearshape"), children: [info, offset])
         menu.accessibilityLabel = String(localized: "Settings")
         return menu
     }

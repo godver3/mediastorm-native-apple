@@ -111,7 +111,7 @@ extension PlayerViewController {
             subtitles: subtitleMenuItems, subtitlesOff: activeSubtitle == nil, style: SubtitleStyleStore.shared.style,
             canSearch: onlineSubtitles.searchAvailable, canTranslate: onlineSubtitles.translateAvailable,
             speeds: engine.isLive ? nil : Self.speedChoices.filter { $0 <= engine.maxSupportedRate },
-            speed: playbackSpeed)
+            speed: playbackSpeed, audioOffsetMs: audioOffsetMs)
         guard state != trackMenuState else { return }
         trackMenuState = state
 
@@ -167,10 +167,14 @@ extension PlayerViewController {
     private func settingsMenuExtras() -> [UIMenuElement] {
         #if os(iOS)
         // A downloaded file is the one copy on the device: nothing to switch to.
-        return (playsDownload ? [] : [switchSourceAction()]) + mobileSettingsExtras()
+        return (playsDownload ? [] : [switchSourceAction()]) + [audioOffsetItem] + mobileSettingsExtras()
         #else
-        return [switchSourceAction()]
+        return [switchSourceAction(), audioOffsetItem]
         #endif
+    }
+
+    private var audioOffsetItem: UIMenu {
+        audioOffsetMenu { [weak self] in self?.rebuildTrackMenus() }
     }
 
     /// The subtitle menu's tracks: the source's, then the online one when there is one.
@@ -248,4 +252,5 @@ struct TrackMenuState: Equatable {
     /// Nil on live, which has no settings menu.
     let speeds: [Float]?
     let speed: Float
+    let audioOffsetMs: Int
 }

@@ -24,6 +24,19 @@ class EnginePlayerViewController: AVPlayerViewController {
     /// The Stream info tab and its session-fixed rows (`+StreamInfo`); internal for that file.
     lazy var streamInfoTab = StreamInfoViewController()
     var streamInfoBase = StreamInfo()
+    /// This stream's audio offset in ms (`+AudioOffset`), loaded from `AudioOffsetStore` under
+    /// `audioOffsetKey`. Every load this player makes (Switch Source, audio-track reload) replays it.
+    var audioOffsetMs = 0
+    /// The stream's `AudioOffsetStore` key; set by each player before its first load.
+    var audioOffsetKey: String? {
+        didSet {
+            guard audioOffsetKey != oldValue else { return }
+            audioOffsetTask?.cancel()
+            audioOffsetMs = audioOffsetKey.map { AudioOffsetStore.shared.offset(for: $0) } ?? 0
+        }
+    }
+    /// The debounced `setAudioDelay` after Audio Offset presses (`+AudioOffset`).
+    var audioOffsetTask: Task<Void, Never>?
 
     init(engine: AetherEngine, logCategory: String) {
         self.engine = engine
@@ -162,6 +175,8 @@ class EnginePlayerViewController: AVPlayerViewController {
         // no native renditions: AVKit selecting one stalled playback on a bitmap track's empty
         // OCR rendition, and building them costs a second source read.
         options.prepareNativeSubtitles = false
+        // This stream's lip-sync offset from the Audio Offset menu (0 until changed).
+        options.audioDelaySeconds = AudioOffset.seconds(audioOffsetMs)
         return options
     }
 }

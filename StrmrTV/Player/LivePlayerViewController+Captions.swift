@@ -45,10 +45,11 @@ extension LivePlayerViewController {
         let addScreen = UIAction(title: String(localized: "Add Screen"), image: UIImage(systemName: "rectangle.split.2x2")) {
             [weak self] _ in self?.addScreen()
         }
+        let offset = audioOffsetMenu { [weak self] in self?.rebuildSubtitleMenu() }
         #if os(iOS)
-        let leading = castMenuItems + [addScreen]
+        let leading = castMenuItems + [addScreen, offset]
         #else
-        let leading: [UIMenuElement] = [addScreen]
+        let leading: [UIMenuElement] = [addScreen, offset]
         #endif
         transportBarCustomMenuItems = leading + (items.isEmpty ? [] : [
             NativeChrome.subtitleMenu(

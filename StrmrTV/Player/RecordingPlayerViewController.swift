@@ -67,6 +67,7 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
         self.recording = recording
         growing = recording.status == .running || recording.status == .starting
         super.init(engine: engine, logCategory: "recording-player")
+        audioOffsetKey = AudioOffsetStore.Key.recording(recording.id)
     }
 
     override func viewDidLoad() {
@@ -77,6 +78,7 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
         #if os(iOS)
         installMobileRecordingControls()
         #else
+        installAudioOffsetMenu()
         if growing {
             Self.fill(recBadge, in: overlayHost)
             overlayHost.addSubview(recBadge)
@@ -87,6 +89,15 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
         }
         #endif
     }
+
+    #if !os(iOS)
+    /// The transport bar's (and the growing recording's HUD's) one menu: Audio Offset.
+    private func installAudioOffsetMenu() {
+        let menu = audioOffsetMenu { [weak self] in self?.installAudioOffsetMenu() }
+        transportBarCustomMenuItems = [menu]
+        softwareHUD.setMenus([menu])
+    }
+    #endif
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)

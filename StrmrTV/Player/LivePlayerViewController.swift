@@ -144,6 +144,8 @@ final class LivePlayerViewController: EnginePlayerViewController {
 
     /// `delay`: time for the old stream's provider connection to close first.
     func tune(after delay: TimeInterval = 0) {
+        // The channel's remembered offset (a retune of the same channel keeps the current one).
+        audioOffsetKey = AudioOffsetStore.Key.live(channel.id)
         lastTune = Date()
         tuneIsDirect = false
         tunePlayed = false

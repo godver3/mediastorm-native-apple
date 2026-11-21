@@ -39,6 +39,7 @@ final class CatchupPlayerViewController: EnginePlayerViewController {
         self.channel = channel
         self.program = program
         super.init(engine: engine, logCategory: "catchup-player")
+        audioOffsetKey = AudioOffsetStore.Key.live(channel.id)
     }
 
     override func viewDidLoad() {
@@ -48,6 +49,14 @@ final class CatchupPlayerViewController: EnginePlayerViewController {
         bindEngine()
         setInfoPanel(title: program.title, subtitle: channel.name, description: program.description)
         installStreamInfo(file: nil, source: StreamSource.joined([String(localized: "Catch-up"), channel.name]))
+        installAudioOffsetMenu()
+    }
+
+    /// The transport bar's (and the software route's HUD's) one menu: Audio Offset.
+    private func installAudioOffsetMenu() {
+        let menu = audioOffsetMenu { [weak self] in self?.installAudioOffsetMenu() }
+        transportBarCustomMenuItems = [menu]
+        softwareHUD.setMenus([menu])
     }
 
     override func viewDidAppear(_ animated: Bool) {
