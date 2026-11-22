@@ -8,6 +8,8 @@ enum AudioOffset {
     static let stepMs = 50
     /// The engine's own bound (`AudioDelayPolicy.maxAbsSeconds`, 2 s), which it doesn't export.
     static let maxAbsMs = 2000
+    /// Quiet time after the last press before the value reaches the engine (one reload per burst).
+    static let settleMs = 1500
 
     /// Into range and onto the step grid.
     static func clamp(_ ms: Int) -> Int {
