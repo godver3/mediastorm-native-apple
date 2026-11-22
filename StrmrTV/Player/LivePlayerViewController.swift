@@ -330,9 +330,17 @@ final class LivePlayerViewController: EnginePlayerViewController {
 
     private func setSoftwareSurface(mounted: Bool) {
         guard mountSoftwareSurface(mounted) else { return }
+        if mounted { installProgrammeBar() } else { removeSoftwareLiveBar() }
         if usesProgrammeBar { showsPlaybackControls = false }
         mountSubtitleOverlay()
         updateTimeshiftStatus()
+    }
+
+    /// The bar's Info card shows the stream lines AVKit's Stream tab would.
+    override func streamInfoDidChange(_ info: StreamInfo) {
+        #if os(tvOS)
+        scrub.hud.setDetails(info.summary)
+        #endif
     }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {

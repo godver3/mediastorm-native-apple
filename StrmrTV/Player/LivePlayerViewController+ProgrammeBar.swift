@@ -26,12 +26,26 @@ final class LiveProgrammeScrub {
 /// the row (Start Over, Go Live, Add Screen, Subtitles), Down opens the Info card. Where a pick
 /// lands is `LiveCatchupRules.decide`: in place inside the timeshift window or the archive
 /// playing, else the archive there, or live.
+///
+/// On tvOS a channel without catch-up gets the same bar while it plays on the software route
+/// (an OTA tuner's MPEG-2, which VideoToolbox can't decode): there is no AVKit bar there, so
+/// without it Add Screen, the audio offset and the Info card had no way in. Left / Right then
+/// stay with the timeshift keys, and the row has no Start Over.
 extension LivePlayerViewController {
-    var usesProgrammeBar: Bool { channel.catchupWindow != nil }
+    var usesProgrammeBar: Bool { hasCatchupBar || usesSoftwareLiveBar }
+    private var hasCatchupBar: Bool { channel.catchupWindow != nil }
+    private var usesSoftwareLiveBar: Bool {
+        #if os(tvOS)
+        !hasCatchupBar && softwareSurfaceMounted
+        #else
+        false
+        #endif
+    }
     private var hud: SoftwareTransportHUD { scrub.hud }
 
+    /// Idempotent: called at load and again whenever the software surface mounts.
     func installProgrammeBar() {
-        guard usesProgrammeBar else { return }
+        guard usesProgrammeBar, scrub.ticker == nil else { return }
         showsPlaybackControls = false
         #if os(iOS)
         // The TV's HUD answers only the remote; touch gets the phone's controls (`+ProgrammeBarMobile`).
@@ -47,6 +61,18 @@ extension LivePlayerViewController {
         scrub.ticker = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshProgrammeBar() }
         }
+        refreshProgrammeRow()
+        refreshProgrammeBar()
+    }
+
+    /// The software route's bar comes off when the tune moves back to AVPlayer, whose bar returns.
+    func removeSoftwareLiveBar() {
+        guard !hasCatchupBar, scrub.ticker != nil else { return }
+        stopProgrammeBar()
+        scrub.ticker = nil
+        cancelScrub()
+        hud.removeFromSuperview()
+        showsPlaybackControls = true
     }
 
     func stopProgrammeBar() {
@@ -104,7 +130,8 @@ extension LivePlayerViewController {
         let goLive = UIAction(title: String(localized: "Go Live"), image: UIImage(systemName: "forward.end")) {
             [weak self] _ in self?.programmeGoLive()
         }
-        hud.setMenus([startOver, goLive] + transportBarCustomMenuItems)
+        let leading: [UIMenuElement] = hasCatchupBar ? [startOver, goLive] : (timeshifting ? [goLive] : [])
+        hud.setMenus(leading + transportBarCustomMenuItems)
         #endif
     }
 
@@ -122,6 +149,8 @@ extension LivePlayerViewController {
             if scrub.target != nil { commitScrub() } else if hud.isShowing, pausable { engine.togglePlayPause() }
         case .leftArrow, .rightArrow:
             guard !hud.rowFocused else { return true }
+            // No catch-up: the timeshift keys seek (`handleTimeshiftPress`).
+            guard hasCatchupBar else { return false }
             if hud.isInfoShowing { hud.setInfo(visible: false) }
             step(forward: press == .rightArrow)
         case .upArrow:
