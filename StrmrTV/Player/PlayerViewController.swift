@@ -40,7 +40,8 @@ final class PlayerViewController: EnginePlayerViewController {
 
     // Up next. The next episode's prequeue starts near the end; with the profile's credits
     // auto-skip on, the Next Episode button counts down and plays it by itself.
-    lazy var nextEpisode = request.nextEpisode
+    /// A watch room's playback doesn't run on into the next episode: the room is for one title.
+    lazy var nextEpisode = request.watchRoom == nil ? request.nextEpisode : nil
     var creditsAutoSkip = false
     /// Settings › Playback › Credits Detection (`PlayerViewController+Credits`).
     var creditsDetectionEnabled = false
@@ -91,6 +92,12 @@ final class PlayerViewController: EnginePlayerViewController {
     var trackCarry: TrackCarry?
     var sourceList: SourceSwitchList?
     var autoSwitchState = AutoSwitchState()
+
+    // Watch Together (`+WatchTogether`): the room sync, its presence card, and whether the
+    // host's stream has been bound for web guests.
+    var watchSync: WatchRoomPlaybackSync?
+    lazy var watchPresence = WatchTogetherPresenceView()
+    var watchSourceBound = false
 
     // Audio menu state.
     var audioTracks: [TrackInfo] = []
@@ -186,6 +193,7 @@ final class PlayerViewController: EnginePlayerViewController {
                 }
                 engine.play()
                 startProgressTimer()
+                startWatchTogether()
                 await applySubtitlePick()
                 trackMenusReady = true
                 rebuildTrackMenus()
@@ -241,6 +249,12 @@ final class PlayerViewController: EnginePlayerViewController {
             return super.pressesBegan(presses, with: event)
         }
         if !handleSoftwarePress(press) { super.pressesBegan(presses, with: event) }
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        // Closing pauses the engine (AVKit's dismissal, an exit to details): not a pause for the room.
+        if isBeingDismissed { watchSync?.stop() }
+        super.viewWillDisappear(animated)
     }
 
     override func infoArtworkDidLoad(_ image: UIImage) {
@@ -317,6 +331,7 @@ final class PlayerViewController: EnginePlayerViewController {
         disarmResumeWatch()
         stopAutoSwitchWatch()
         stopCountdown()
+        stopWatchTogether()
         settingsHider.stop()
         skipSegments.cancel()
         cancelCreditsDetection()

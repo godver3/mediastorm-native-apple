@@ -32,6 +32,10 @@ extension MobileDetailsView {
                     Label { Text("Cast to Device…") } icon: { Image.castIcon() }
                 }
                 .disabled(model.primaryTarget == nil || model.title == nil)
+                Button { model.watchTogetherPicking = true } label: {
+                    Label("Watch Together…", systemImage: "person.2")
+                }
+                .disabled(model.title == nil)
             }
             downloadItems
             titleStateItems

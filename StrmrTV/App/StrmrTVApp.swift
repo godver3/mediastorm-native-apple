@@ -67,6 +67,9 @@ struct RootView: View {
                                     detail: playback.resolvingDetail) {
                     playback.cancelResolve()
                 }
+                .overlay(alignment: .topTrailing) {
+                    if let launch = request.watchRoom { WatchRoomPreparingOverlay(launch: launch).padding(60) }
+                }
                 .transition(.opacity)
             }
         }

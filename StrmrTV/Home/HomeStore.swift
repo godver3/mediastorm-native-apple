@@ -41,15 +41,15 @@ final class HomeStore: ObservableObject {
     /// Continue Watching as last fetched, for the Top Shelf; nil until the first load.
     private var topShelfContinue: [ContinueWatchingItem]?
 
-    private var settings: HomeSettings?
-    private var plan: [PlannedShelf] = []
+    private(set) var settings: HomeSettings?
+    private(set) var plan: [PlannedShelf] = []
     private var rows: [String: HomeShelf] = [:]
     /// The manifest revision of the last full load; a different one means reload.
     private var revision: String?
-    private var loadGeneration = 0
+    private(set) var loadGeneration = 0
     /// Full loads and staleness checks running. Returning from the player fires `.task`,
     /// the cover change and the scene phase together: the first checks, the rest skip.
-    private var loadsRunning = 0
+    private(set) var loadsRunning = 0
     private var checksRunning = 0
     /// Rows are published as they arrive once the page has been revealed.
     private var revealed = false
@@ -157,7 +157,7 @@ final class HomeStore: ObservableObject {
     }
 
     /// Fetches rows; like `load`, outlives a cancelled caller.
-    private func loadRows(_ planned: [PlannedShelf], generation: Int) async {
+    func loadRows(_ planned: [PlannedShelf], generation: Int) async {
         await Task { await fetchRows(planned, generation: generation) }.value
     }
 

@@ -59,6 +59,10 @@ struct LandscapeCard: View {
                 LibraryEntryLink(entry: entry) { artwork }
                     .cardLift()
                     .accessibilityLabel("\(card.title), \(card.subtitle)")
+            case let .watchRoom(route):
+                NavigationLink(value: route) { artwork }
+                    .cardLift()
+                    .accessibilityLabel("\(card.title), \(card.subtitle)")
             }
 
             if text == .below { CardCaption(title: card.title, subtitle: card.subtitle, width: width) }

@@ -82,6 +82,9 @@ struct DetailsView: View {
     @State var orderings: [SeriesOrdering] = []
     @State var activeOrdering: String?
     @State var pickedOrdering: String?
+    /// Watch Together (`+WatchTogether`): the invite picker and the lobby of a room created here.
+    @State var watchTogetherPicking = false
+    @State var openedRoom: WatchRoomRoute?
 
     enum DetailsAction: String, Hashable { case primary, startOver, versions, chooseSource, tracks, trailer, watchlist, lists, watched, more }
 
@@ -264,6 +267,7 @@ struct DetailsView: View {
             Task { await load() }
         }
         .bulkWatchConfirmation($pendingBulkWatch)
+        .modifier(watchTogetherPresentation)
         .fullScreenCover(isPresented: $showPrequeueTracks) { prequeueTracksPage }
         .fullScreenCover(isPresented: $customizingButtons) { DetailsButtonsSheet() }
         .modifier(libraryVersionsPresentation)

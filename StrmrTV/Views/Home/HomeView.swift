@@ -221,6 +221,7 @@ struct HomeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await store.refreshIfStale() } }
         }
+        .modifier(WatchTogetherShelfPolling(store: store, covered: isCovered))
         .onChange(of: watchlist.items) { _, items in store.watchlist = items }
         .onChange(of: store.shelves) { old, new in refocusIfGone(from: old, to: new) }
         .onChange(of: store.slots) { _, slots in refocusFromPlaceholder(slots) }

@@ -48,6 +48,7 @@ extension DetailsView {
                 }
             }
             orderingMenu
+            watchTogetherItem
             Divider()
             Button { customizingButtons = true } label: {
                 Label("Customize Buttons…", systemImage: "slider.horizontal.3")

@@ -54,6 +54,9 @@ final class MobileDetailsModel: ObservableObject {
     @Published var showsPrequeueTracks = false
     /// Download / Download Season's release picker (`+Downloads`).
     @Published var downloadRequest: DownloadRequest?
+    /// Watch Together (`MobileDetailsView+WatchTogether`): the invite picker and a new room's lobby.
+    @Published var watchTogetherPicking = false
+    @Published var openedRoom: WatchRoomRoute?
 
     let trailer = TrailerController()
     private let playback = PlaybackCoordinator.shared

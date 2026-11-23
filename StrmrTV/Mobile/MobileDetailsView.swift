@@ -64,6 +64,7 @@ struct MobileDetailsView: View {
         .bulkWatchConfirmation($model.pendingBulkWatch)
         .modifier(MobileDetailsPresentations(model: model))
         .modifier(MobileDetailsDownloads(model: model))
+        .modifier(MobileDetailsWatchTogether(model: model))
         .overlay(alignment: .bottom) { toastView }
     }
 

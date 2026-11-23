@@ -66,6 +66,7 @@ struct MobileMainView: View {
         .task { await stores.titles.refresh() }
         .task { await stores.listShelves.refresh() }
         .task { await BadgeSettingsStore.shared.refresh() }
+        .task { WatchTogetherSession.shared.restore() }
         .onReceive(NotificationCenter.default.publisher(for: .continueWatchingChanged)) { _ in
             Task { await stores.titles.refreshContinueWatching() }
         }

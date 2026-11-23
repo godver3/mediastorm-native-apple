@@ -10,6 +10,7 @@ extension View {
             .navigationDestination(for: BrowseList.self) { MobileListPage(list: $0) }
             .navigationDestination(for: LibraryShowTarget.self) { MobileLibraryShowView(target: $0) }
             .navigationDestination(for: MobileSearchRoute.self) { _ in MobileSearchView() }
+            .navigationDestination(for: WatchRoomRoute.self) { MobileWatchRoomView(route: $0) }
     }
 }
 

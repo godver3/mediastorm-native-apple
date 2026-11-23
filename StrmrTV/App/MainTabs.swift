@@ -55,6 +55,8 @@ struct MainTabs: View {
         .task { await titles.refresh() }
         .task { await listShelves.refresh() }
         .task { await BadgeSettingsStore.shared.refresh() }
+        // The profile's saved watch room: kept if it still runs, else forgotten.
+        .task { WatchTogetherSession.shared.restore() }
         // Hidden / Set Aside / watched state behind the long-press menus.
         .onReceive(NotificationCenter.default.publisher(for: .continueWatchingChanged)) { _ in
             Task { await titles.refreshContinueWatching() }
@@ -141,6 +143,7 @@ struct MainTabs: View {
                 .navigationDestination(for: PersonRef.self) { PersonPage(person: $0).pinsSideMenu() }
                 .navigationDestination(for: BrowseList.self) { ListPage(list: $0).pinsSideMenu() }
                 .navigationDestination(for: LibraryShowTarget.self) { LibraryShowView(target: $0).pinsSideMenu() }
+                .navigationDestination(for: WatchRoomRoute.self) { WatchRoomView(route: $0).pinsSideMenu() }
         }
         .pinsSideMenu()
         .environment(\.homeAction) { homeAction($0, view: view, path: path) }

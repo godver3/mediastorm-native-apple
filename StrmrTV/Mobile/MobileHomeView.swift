@@ -99,6 +99,7 @@ private struct MobileHomeContent: View {
                 if phase == .active { Task { await store.refreshIfStale() } }
             }
             .onChange(of: watchlist.items) { _, items in store.watchlist = items }
+            .modifier(WatchTogetherShelfPolling(store: store))
             .onChange(of: playback.sessionsEnded) { Task { await store.reloadPlaybackRows() } }
             .onReceive(NotificationCenter.default.publisher(for: .continueWatchingChanged)) { _ in
                 Task { await store.reloadPlaybackRows() }

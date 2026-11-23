@@ -24,6 +24,10 @@ struct Profile: Decodable, Identifiable, Hashable {
     /// "rating" (or none) filters by rating server-side.
     let kidsMode: String?
     let kidsAllowedLists: [String]?
+    /// The owning account: Watch Together invites only profiles of the same account.
+    var accountId: String? = nil
+    /// May mint share links, which Watch Together's external guest invites need.
+    var allowShareLinks: Bool? = nil
 
     var requiresPin: Bool { hasPin == true }
     var isKidsCurated: Bool { isKidsProfile == true && kidsMode == "content_list" }

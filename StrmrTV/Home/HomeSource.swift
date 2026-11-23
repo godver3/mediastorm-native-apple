@@ -23,6 +23,8 @@ enum HomeSource: Equatable, Sendable {
     case promotedTopTen
     /// A local, Plex or Jellyfin library's newest titles.
     case library(LibraryRef)
+    /// Watch Together: this profile's rooms and invitations (`WatchTogetherShelf`).
+    case watchTogether
 
     struct HubLink: Equatable, Sendable {
         let id: String
@@ -61,6 +63,7 @@ enum HomeSource: Equatable, Sendable {
         case "my-recently-aired": self = .recentlyAired(config.calendarSources)
         case "dashboard": self = .dashboard
         case "live-favorites": self = .liveFavorites
+        case "watch-together": self = .watchTogether
         case HomeShelf.promotedTopTenID: self = .promotedTopTen
         case "watch-something": self = .watchSomething(hasAI: settings.hasAI)
         case "streaming-services":

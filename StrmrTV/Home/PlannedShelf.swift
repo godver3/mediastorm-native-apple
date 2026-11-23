@@ -12,13 +12,12 @@ struct PlannedShelf: Identifiable, Sendable {
 
     var id: String { config.id }
 
-    /// The enabled shelves in order, minus those the app can't show yet (watch rooms) and
-    /// those a kids profile doesn't get. A curated kids profile gets a row per
+    /// The enabled shelves in order, minus those a kids profile doesn't get. A curated kids profile gets a row per
     /// allowed list instead of the open-ended ones (trending, Top 10, streaming services).
     static func plan(_ settings: HomeSettings, profile: Profile?) -> [PlannedShelf] {
         let isKids = profile?.isKidsProfile == true
         let curated = profile?.isKidsCurated == true
-        var all = Self.applyTopShelf(settings.shelves, settings: settings, promote: !curated)
+        var all = Self.applyTopShelf(Self.withWatchTogether(settings.shelves), settings: settings, promote: !curated)
         if let profile, curated {
             all.removeAll { Self.notForCuratedKids.contains($0.id) }
             all = (all + Self.kidsListShelves(profile.kidsAllowedLists ?? [])).sorted { ($0.order ?? 0) < ($1.order ?? 0) }
@@ -38,6 +37,15 @@ struct PlannedShelf: Identifiable, Sendable {
             return PlannedShelf(config: config, source: source, cap: limited ? limit : settings.itemCap,
                                 limited: limited, exploreFirst: settings.exploreFirst)
         }
+    }
+
+    /// Watch Together leads Home unless the config lists it (the defaults' rule, `HomeShelfDefaults`):
+    /// profile configs saved before the shelf existed don't name it. Empty, it isn't shown.
+    private static func withWatchTogether(_ shelves: [ShelfConfig]) -> [ShelfConfig] {
+        guard !shelves.contains(where: { $0.id == "watch-together" }),
+              let shelf = ShelfConfig.make(["id": "watch-together", "name": "Watch Together", "enabled": true, "order": -1])
+        else { return shelves }
+        return [shelf] + shelves
     }
 
     private static let notForCuratedKids: Set = ["trending-movies", "trending-tv", "top-ten", "streaming-services"]
@@ -216,6 +224,9 @@ struct PlannedShelf: Identifiable, Sendable {
         case .liveFavorites:
             let cards = try await APIClient.shared.favoriteChannelCards(limit: cap)
             return HomeShelf(id: id, title: config.title, cards: cards, cap: cap)
+
+        case .watchTogether:
+            return HomeShelf(id: id, title: config.title, cards: try await WatchTogetherShelf.cards(), cap: cap)
 
         case let .library(library):
             // Newest first for every source (Plex and Jellyfin default to A–Z), in the view's media type.

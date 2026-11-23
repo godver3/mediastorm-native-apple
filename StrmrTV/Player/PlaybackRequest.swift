@@ -72,6 +72,8 @@ struct PlaybackRequest {
     /// The playback speed picked in the player, carried into Up Next and a source switch (a new
     /// playback from the details page starts at 1x).
     var speed: Float = 1
+    /// Watch Together: the room this playback follows (`WatchRoomPlaybackSync`).
+    var watchRoom: WatchRoomLaunch?
 
     #if DEBUG
     /// `SoftwarePlayerProbe` plays a local file under a made-up title; it must not reach watch history.

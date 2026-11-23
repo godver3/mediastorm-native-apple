@@ -13,6 +13,8 @@ enum HomeLink: Hashable {
     /// An unmatched library title, which has no details page: plays the file, or opens the
     /// show's library episodes (`LibraryEntryLink`). Matched library titles open `details`.
     case library(LibraryEntry)
+    /// A watch room or an account invitation to one: opens its lobby.
+    case watchRoom(WatchRoomRoute)
 }
 
 enum HomeAction: String, Hashable {

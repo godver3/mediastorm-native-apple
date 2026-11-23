@@ -46,6 +46,10 @@ struct MobileCardLink<Label: View>: View {
             LibraryEntryLink(entry: entry) { label }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(card.title), \(card.subtitle)")
+        case let .watchRoom(route):
+            NavigationLink(value: route) { label }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(card.title), \(card.subtitle)")
         }
     }
 }
