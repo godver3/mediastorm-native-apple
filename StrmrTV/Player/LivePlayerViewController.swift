@@ -124,6 +124,7 @@ final class LivePlayerViewController: EnginePlayerViewController {
         installProgrammeBar()
         #if os(iOS)
         installMobileLiveControls()
+        cover.onClose = { [weak self] in self?.dismiss(animated: true) }
         #endif
         bindEngine()
         telemetry.onDistress = { [weak self] in self?.noteHLSProofDistress($0) }
