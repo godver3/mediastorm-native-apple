@@ -1,7 +1,7 @@
-# MediaStorm for Apple TV
+# MediaStorm for Apple TV, iPhone and iPad
 
-A native SwiftUI tvOS client for the [MediaStorm](https://github.com/godver3/mediastorm)
-server. Playback uses [AetherEngine](https://github.com/superuser404notfound/AetherEngine).
+Native SwiftUI clients for the [MediaStorm](https://github.com/godver3/mediastorm) server: a tvOS app
+and an iOS / iPadOS app (`StrmrMobile`). Playback uses [AetherEngine](https://github.com/superuser404notfound/AetherEngine).
 
 ## Building
 
