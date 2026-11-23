@@ -19,11 +19,34 @@ enum EngineLogBridge {
 
     static func install() {
         EngineLog.handler = { line in
-            guard !line.hasPrefix("[HLSLocalServer] GET ") else { return }
+            guard !line.hasPrefix("[HLSLocalServer] GET "), !isTrickPlayNoise(line) else { return }
+            if isAlwaysKept(line) {
+                log.info(line)
+                return
+            }
             let (pass, droppedBefore) = admit()
             if droppedBefore > 0 { log.info("(\(droppedBefore) engine lines dropped)") }
             if pass { log.info(line) }
         }
+    }
+
+    /// Scrubbing-thumbnail misses: a reload fires dozens at once and they used to spend the whole
+    /// window's budget, dropping the gate lines that show the reload's A/V offset.
+    private static func isTrickPlayNoise(_ line: String) -> Bool {
+        line.hasPrefix("[HLSLocalServer] -> 404 /iframe")
+            || (line.hasPrefix("[HLSLocalServer] send failed for /iframe"))
+    }
+
+    /// A/V-sync evidence, a few lines per load or restart, so it bypasses the cap.
+    private static func isAlwaysKept(_ line: String) -> Bool {
+        line.hasPrefix("[HLSSegmentProducer] video gate open")
+            || line.hasPrefix("[HLSSegmentProducer] audio gate open")
+            || line.hasPrefix("[HLSSegmentProducer] WARNING: audio gate")
+            || line.hasPrefix("[HLSSegmentProducer] init OK")
+            || line.hasPrefix("[HLSVideoEngine] audio:")
+            || line.hasPrefix("[HLSVideoEngine] initial producer anchored")
+            || line.hasPrefix("[NativeAVPlayerHost]") && line.contains(" load url=")
+            || line.hasPrefix("[AetherEngine] reload")
     }
 
     /// Whether this line fits the current window, and how many the previous window dropped.
