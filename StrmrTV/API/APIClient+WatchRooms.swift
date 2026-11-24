@@ -99,10 +99,19 @@ extension APIClient {
         try await sendRaw("DELETE", roomPath(roomID, "/external-invite"))
     }
 
-    /// The host's resolved stream, so web guests can play the same source.
-    func bindWatchPartySource(_ roomID: String, source: String, params: [String: String]) async throws {
+    /// The host's resolved stream, so web guests can play the same source. Bound per episode: the
+    /// host binds again on each episode (a 409 means this episode already has a source).
+    func bindWatchPartySource(_ roomID: String, source: String, params: [String: String],
+                              episode: WatchRoomEpisode? = nil) async throws {
         try await sendRaw("POST", roomPath(roomID, "/external-source"),
-                          jsonObject: ["source": source, "params": params], promptOnLock: false, timeout: 60)
+                          jsonObject: Self.externalSourceBody(source: source, params: params, episode: episode),
+                          promptOnLock: false, timeout: 60)
+    }
+
+    nonisolated static func externalSourceBody(source: String, params: [String: String], episode: WatchRoomEpisode?) -> [String: Any] {
+        var body: [String: Any] = ["source": source, "params": params]
+        if let episode { body["episode"] = episode.json }
+        return body
     }
 
     /// A link or QR value from the server: absolute as sent, else against the server.

@@ -133,4 +133,12 @@ final class WatchRoomModelTests: XCTestCase {
         XCTAssertEqual(body?["episodeNumber"] as? Int, 2)
         XCTAssertNil(body?["episodeId"])
     }
+
+    func testExternalSourceBindsPerEpisode() {
+        let body = APIClient.externalSourceBody(source: "/s", params: ["a": "b"],
+                                                episode: WatchRoomEpisode(seasonNumber: 2, episodeNumber: 4))
+        XCTAssertEqual(body["source"] as? String, "/s")
+        XCTAssertEqual((body["episode"] as? [String: Any])?["episodeNumber"] as? Int, 4)
+        XCTAssertNil(APIClient.externalSourceBody(source: "/s", params: [:], episode: nil)["episode"], "movie")
+    }
 }

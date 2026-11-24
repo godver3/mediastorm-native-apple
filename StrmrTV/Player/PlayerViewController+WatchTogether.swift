@@ -99,17 +99,20 @@ extension PlayerViewController: WatchRoomSyncedPlayer {
         watchPresence.update(room)
     }
 
-    /// The host shares its resolved stream once, so web guests (who can't resolve on their own)
-    /// play the same source. Needs the profile's share-link permission, as on the Expo app.
+    /// The host shares its resolved stream once per player, so web guests (who can't resolve on
+    /// their own) play the same source. Sources are per episode: Up Next opens a new player, which
+    /// binds the new episode's. Needs the profile's share-link permission, as on the Expo app.
     private func bindWatchPartySourceIfHost(_ launch: WatchRoomLaunch) {
         guard launch.isHost, !watchSourceBound, !playsDownload,
               AppSession.shared.profile?.allowShareLinks == true else { return }
         watchSourceBound = true
         let params = watchPartyParams
         let path = streamPath
+        let episode = request.episode.map(WatchRoomEpisode.init)
         Task { [weak self] in
             do {
-                try await APIClient.shared.bindWatchPartySource(launch.roomID, source: path, params: params)
+                try await APIClient.shared.bindWatchPartySource(launch.roomID, source: path, params: params,
+                                                                episode: episode)
                 self?.log.notice("watch room: stream bound for web guests")
             } catch {
                 // A 4xx (another source already bound) won't change on retry.
