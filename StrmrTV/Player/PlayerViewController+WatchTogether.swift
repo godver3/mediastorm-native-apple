@@ -31,7 +31,7 @@ extension PlayerViewController: WatchRoomSyncedPlayer {
         guard let launch = request.watchRoom, watchSync == nil else { return }
         let sync = WatchRoomPlaybackSync(launch: launch, playingItem: request.title.titleID,
                                          playingEpisode: request.episode.map(WatchRoomEpisode.init),
-                                         resumePosition: launch.isHost && launch.position == nil ? request.startPosition : nil,
+                                         resumePosition: WatchRoomSyncRules.hostResumeSeed(launch: launch, start: request.startPosition),
                                          player: self)
         sync.onRoom = { [weak self] room in self?.showPresence(room) }
         sync.onEnded = { [weak self] in

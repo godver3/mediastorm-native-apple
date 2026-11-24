@@ -9,6 +9,16 @@ struct WatchRoomLaunch: Hashable, Sendable {
     let isHost: Bool
     /// The room's position when the lobby opened the title; nil starts where details would.
     let position: Double?
+    /// The lobby opened this player: a host's resume point may seed the room. A replacement for
+    /// the same episode (source switch, Auto Switch) or the next episode never seeds.
+    var seedsResume = true
+
+    /// The same room for a player that replaces this one.
+    var replacement: WatchRoomLaunch {
+        var next = WatchRoomLaunch(roomID: roomID, itemID: itemID, isHost: isHost, position: nil)
+        next.seedsResume = false
+        return next
+    }
 }
 
 /// The device's Watch Together state, shared by both platforms: the active room for the current

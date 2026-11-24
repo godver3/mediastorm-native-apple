@@ -65,6 +65,8 @@ extension PlayerViewController {
                                    start: position > 0 ? .seconds(position) : nil,
                                    following: request.following, artwork: request.artwork)
         next.speed = playbackSpeed
+        // Same episode, same room: the new player follows it without seeding a resume point.
+        next.watchRoom = request.watchRoom?.replacement
         dismiss(animated: true) { PlaybackCoordinator.shared.play(next, source: result, carry: carry) }
     }
 

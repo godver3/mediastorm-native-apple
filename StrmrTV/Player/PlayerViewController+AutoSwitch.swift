@@ -139,6 +139,8 @@ extension PlayerViewController {
         next.autoSwitchTried = tried
         next.autoSwitchCount = request.autoSwitchCount + 1
         next.speed = playbackSpeed
+        // Same episode, same room: the new player follows it without seeding a resume point.
+        next.watchRoom = request.watchRoom?.replacement
         subtitleStatus.hide()
         dismiss(animated: true) {
             PlaybackCoordinator.shared.play(next, source: result, carry: carry, resolved: resolved)

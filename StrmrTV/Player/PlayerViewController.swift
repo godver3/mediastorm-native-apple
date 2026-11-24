@@ -44,7 +44,7 @@ final class PlayerViewController: EnginePlayerViewController {
     /// In a watch room only the host advances; the next episode follows the same room.
     lazy var nextEpisode: PlaybackRequest? = request.watchRoom.map { launch in
         guard WatchRoomSyncRules.allowsUpNext(isHost: launch.isHost), var next = self.request.nextEpisode else { return nil }
-        next.watchRoom = WatchRoomLaunch(roomID: launch.roomID, itemID: launch.itemID, isHost: true, position: nil)
+        next.watchRoom = launch.replacement
         return next
     } ?? self.request.nextEpisode
     var creditsAutoSkip = false

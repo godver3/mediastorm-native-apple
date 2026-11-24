@@ -50,6 +50,15 @@ final class WatchRoomSyncTests: XCTestCase {
         XCTAssertFalse(Rules.allowsUpNext(isHost: false))
     }
 
+    func testOnlyTheLobbysHostPlayerSeedsItsResumePoint() {
+        let lobby = WatchRoomLaunch(roomID: "r", itemID: "i", isHost: true, position: nil)
+        XCTAssertEqual(Rules.hostResumeSeed(launch: lobby, start: 36), 36)
+        XCTAssertNil(Rules.hostResumeSeed(launch: lobby.replacement, start: 420), "source switch / Auto Switch / Up Next")
+        XCTAssertFalse(lobby.replacement.seedsResume)
+        XCTAssertNil(Rules.hostResumeSeed(launch: WatchRoomLaunch(roomID: "r", itemID: "i", isHost: true, position: 420), start: 36))
+        XCTAssertNil(Rules.hostResumeSeed(launch: WatchRoomLaunch(roomID: "r", itemID: "i", isHost: false, position: nil), start: 36))
+    }
+
     func testSeeksOnlyBeyondOneAndAHalfSeconds() {
         XCTAssertFalse(Rules.shouldSeek(current: 100, target: 101.4))
         XCTAssertTrue(Rules.shouldSeek(current: 100, target: 101.6))

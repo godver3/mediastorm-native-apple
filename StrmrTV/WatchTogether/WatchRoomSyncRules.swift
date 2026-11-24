@@ -93,6 +93,12 @@ enum WatchRoomSyncRules {
         isHost && firstSnapshot && resume > 0 && abs(roomPosition - resume) > hostSeedThreshold
     }
 
+    /// The resume point a host's sync may seed into the room: only for the player the lobby
+    /// opened on a fresh room (no room position), never for a replacement player.
+    static func hostResumeSeed(launch: WatchRoomLaunch, start: Double?) -> Double? {
+        launch.isHost && launch.position == nil && launch.seedsResume ? start : nil
+    }
+
     /// Whether playback changed locally since `previous`: paused or resumed, or a position
     /// more than 2.5 s from where it should be by now.
     static func localChange(from previous: Sample, to now: Sample) -> Bool {
