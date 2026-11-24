@@ -3,12 +3,17 @@ import UIKit
 /// "Watching together" card in the player's top corner (the Expo `WatchTogetherPresence`): the
 /// joined members, a presence dot each, and Ready / Loading while the room waits for every
 /// player. Display only: it takes no touches and can never take focus on TV. It shows when
-/// something changes (and while the room waits or someone buffers), then fades after a few seconds.
+/// something changes (and while the room waits or someone buffers), then fades after a few seconds;
+/// it also shows whenever the player's controls are up, and hides with them.
 final class WatchTogetherPresenceView: UIView {
     private let stack = UIStackView()
     private var hideWork: DispatchWorkItem?
     private static let tv = UIDevice.current.userInterfaceIdiom == .tv
     private static let visibleFor: TimeInterval = 8
+    private var hasRoom = false
+    /// Shown for a change, or held while the room waits or someone buffers.
+    private var flashing = false
+    private var controlsShown = false
 
     init() {
         super.init(frame: .zero)
@@ -41,22 +46,40 @@ final class WatchTogetherPresenceView: UIView {
     func update(_ room: WatchRoom?) {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let members = room?.joinedMembers ?? []
-        guard let room, !members.isEmpty else { return fade(out: true) }
+        hideWork?.cancel()
+        guard let room, !members.isEmpty else {
+            hasRoom = false
+            flashing = false
+            return refresh()
+        }
+        hasRoom = true
         stack.addArrangedSubview(heading())
         for member in members { stack.addArrangedSubview(row(member, waiting: room.waitingForReady)) }
         let names = members.filter(\.present).map(\.name).joined(separator: ", ")
         accessibilityLabel = String(localized: "Watching together with \(names)")
-        fade(out: false)
-        hideWork?.cancel()
+        flashing = true
+        refresh()
         // Keeps showing while the room waits for players or someone is buffering.
         guard !room.waitingForReady, !members.contains(where: \.buffering) else { return }
-        let work = DispatchWorkItem { [weak self] in self?.fade(out: true) }
+        let work = DispatchWorkItem { [weak self] in
+            self?.flashing = false
+            self?.refresh()
+        }
         hideWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.visibleFor, execute: work)
     }
 
-    private func fade(out: Bool) {
-        UIView.animate(withDuration: 0.3) { self.alpha = out ? 0 : 1 }
+    /// The player's controls came up or went away.
+    func setControlsVisible(_ visible: Bool) {
+        guard visible != controlsShown else { return }
+        controlsShown = visible
+        refresh()
+    }
+
+    private func refresh() {
+        let shown = hasRoom && (flashing || controlsShown)
+        guard (alpha > 0.5) != shown else { return }
+        UIView.animate(withDuration: 0.3) { self.alpha = shown ? 1 : 0 }
     }
 
     private func heading() -> UIView {

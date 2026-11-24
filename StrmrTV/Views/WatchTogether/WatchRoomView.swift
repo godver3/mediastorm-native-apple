@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// TV: a watch room's lobby (the Expo `watch-room` screen). Members with their joined, present,
-/// ready and buffering state; Ready for guests, Start for the host; Join Playback once playing.
+/// ready and buffering state; Ready for guests, Start for the host; Join once playing.
 /// The host's invitations and external guest link are on the right (`+Host`). Back (Menu) ends
 /// the room for the host and leaves it for others; an account invitation is accepted or
 /// declined first.
@@ -102,7 +102,7 @@ struct WatchRoomView: View {
     private func actions(_ room: WatchRoom) -> some View {
         HStack(spacing: 30) {
             if model.isPlaying {
-                Button { model.openTitle() } label: { Label(model.opened ? "Rejoin Playback" : "Join Playback", systemImage: "play.fill") }
+                Button { model.openTitle() } label: { Label(model.opened ? "Rejoin" : "Join", systemImage: "play.fill") }
                 if let episode = model.hostEpisodeText { Text(episode).foregroundStyle(.secondary) }
             } else if model.isHost {
                 Button { Task { await model.startPlayback() } } label: { Label("Start", systemImage: "play.fill") }

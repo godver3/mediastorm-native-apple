@@ -45,7 +45,11 @@ final class MobilePlayerControls: UIView {
 
     /// Where the chrome is headed: its opacity stays 1 through a fade out (glass buttons drop
     /// their glass at once when it doesn't), so this, not `chrome.alpha`, says whether it shows.
-    private(set) var isChromeVisible = false
+    private(set) var isChromeVisible = false {
+        didSet { if isChromeVisible != oldValue { onChromeVisibility?(isChromeVisible) } }
+    }
+    /// The controls came up (true) or went away (false).
+    var onChromeVisibility: ((Bool) -> Void)?
 
     init(title: String, subtitle: String?) {
         super.init(frame: .zero)

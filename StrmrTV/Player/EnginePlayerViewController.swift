@@ -17,6 +17,9 @@ class EnginePlayerViewController: AVPlayerViewController {
     /// has its own.
     let clockLabel = PlayerClockLabel()
     private(set) var softwareSurfaceMounted = false
+    /// The player's controls (AVKit's transport bar, or the software route's HUD) came up or
+    /// went away; the VOD player shows its watch-room presence with them.
+    func controlsVisibilityChanged(_ visible: Bool) {}
     /// The display's Match Content setting, read when the player appears.
     var matchContent = false
     /// The info panel's artwork load (`+InfoPanel`); internal for that file.

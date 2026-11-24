@@ -30,7 +30,7 @@ final class WatchRoomLobbyModel: ObservableObject {
     @Published private(set) var busy = false
     /// The room is over (ended, or gone).
     @Published private(set) var ended = false
-    /// This lobby already opened the player once: it offers Rejoin Playback instead of reopening.
+    /// This lobby already opened the player once: it offers Rejoin instead of reopening.
     @Published private(set) var opened = false
     /// Decline (or a host's Back) finished: the screen closes.
     @Published private(set) var closed = false
@@ -59,7 +59,7 @@ final class WatchRoomLobbyModel: ObservableObject {
     var backdropURL: String? { room?.backdropUrl ?? accountInvitation?.backdropUrl }
     /// Playback has started: the lobby offers to (re)join it.
     var isPlaying: Bool { room.map { $0.status == .playing || $0.status == .paused } ?? false }
-    /// The host's episode while playback runs (Rejoin Playback starts it; the lobby never reopens
+    /// The host's episode while playback runs (Rejoin starts it; the lobby never reopens
     /// the player by itself when the host moves on).
     var hostEpisodeText: String? {
         guard isPlaying, let episode = room?.episode else { return nil }
@@ -225,7 +225,7 @@ final class WatchRoomLobbyModel: ObservableObject {
         }
     }
 
-    /// Plays the title at the room's position (Join / Rejoin Playback, or the room starting).
+    /// Plays the title at the room's position (Join / Rejoin, or the room starting).
     func openTitle() {
         guard let room, PlaybackCoordinator.shared.resolving == nil else { return }
         opened = true

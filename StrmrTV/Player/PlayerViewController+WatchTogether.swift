@@ -41,6 +41,12 @@ extension PlayerViewController: WatchRoomSyncedPlayer {
         }
         sync.onFollowEpisode = { [weak self] room in self?.followRoomEpisode(room) }
         watchSync = sync
+        // The presence card also shows with the controls (AVKit's chrome reports through
+        // `controlsVisibilityChanged`).
+        softwareHUD.onVisibility = { [weak self] in self?.controlsVisibilityChanged($0) }
+        #if os(iOS)
+        mobileControls.onChromeVisibility = { [weak self] in self?.controlsVisibilityChanged($0) }
+        #endif
         sync.start()
         bindWatchPartySourceIfHost(launch)
     }

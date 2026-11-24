@@ -78,7 +78,7 @@ struct MobileWatchRoomView: View {
     @ViewBuilder
     private var actions: some View {
         if model.isPlaying {
-            Button { model.openTitle() } label: { Label(model.opened ? "Rejoin Playback" : "Join Playback", systemImage: "play.fill") }
+            Button { model.openTitle() } label: { Label(model.opened ? "Rejoin" : "Join", systemImage: "play.fill") }
             if let episode = model.hostEpisodeText { Text(episode).foregroundStyle(.secondary) }
         } else if model.isHost {
             Button { Task { await model.startPlayback() } } label: { Label("Start", systemImage: "play.fill") }

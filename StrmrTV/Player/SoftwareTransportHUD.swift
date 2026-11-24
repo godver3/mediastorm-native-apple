@@ -29,6 +29,8 @@ final class SoftwareTransportHUD: UIView {
     private var fraction: CGFloat = 0
     private var previewFraction: CGFloat = 0
     private var hideWork: DispatchWorkItem?
+    /// The bar came up (true) or went away (false).
+    var onVisibility: ((Bool) -> Void)?
     private var paused = false
 
     /// The menu row has focus (Up from the bar); the bar dims behind it, as AVKit's does.
@@ -358,6 +360,7 @@ final class SoftwareTransportHUD: UIView {
     func flash() {
         hideWork?.cancel()
         UIView.animate(withDuration: 0.2) { self.chrome.alpha = 1 }
+        onVisibility?(true)
         let work = DispatchWorkItem { [weak self] in
             guard let self, !paused, !rowFocused, !isInfoShowing else { return }
             hide()
@@ -373,5 +376,6 @@ final class SoftwareTransportHUD: UIView {
         info.alpha = 0
         buttonRow.alpha = 1
         UIView.animate(withDuration: 0.4) { self.chrome.alpha = 0 }
+        onVisibility?(false)
     }
 }

@@ -262,6 +262,10 @@ final class PlayerViewController: EnginePlayerViewController {
         super.viewWillDisappear(animated)
     }
 
+    override func controlsVisibilityChanged(_ visible: Bool) {
+        watchPresence.setControlsVisible(visible)
+    }
+
     override func infoArtworkDidLoad(_ image: UIImage) {
         softwareHUD.setArtwork(image)
     }

@@ -21,6 +21,7 @@ extension EnginePlayerViewController: @preconcurrency AVPlayerViewControllerDele
                               willTransitionToVisibilityOfTransportBar visible: Bool,
                               with coordinator: AVPlayerViewControllerAnimationCoordinator) {
         let shown = visible && !softwareSurfaceMounted
+        if !softwareSurfaceMounted { controlsVisibilityChanged(visible) }
         if shown {
             clockLabel.refresh()
             overlayHost.bringSubviewToFront(clockLabel)
