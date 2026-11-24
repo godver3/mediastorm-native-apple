@@ -58,6 +58,7 @@ final class QualityPresetsTests: XCTestCase {
         let ranked = try XCTUnwrap(SourceResult(["title": "Z", "filterStatus": "passed",
                                                  "attributes": ["qualityPreset": "UHD"]], index: 0))
         XCTAssertEqual(SourceSearch.rankedBy([other, ranked]), "UHD")
-        XCTAssertNil(SourceSearch.rankedBy([other]))
+        XCTAssertEqual(SourceSearch.rankedBy([other]), "UHD")
+        XCTAssertNil(SourceSearch.rankedBy([identity]))
     }
 }

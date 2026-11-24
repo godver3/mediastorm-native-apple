@@ -75,7 +75,7 @@ enum SourceSearch {
 
     /// The preset that ranked `results`, for the list's "Ranked by" header.
     nonisolated static func rankedBy(_ results: [SourceResult]) -> String? {
-        results.first(where: { !$0.isOtherQuality && $0.qualityPresetName != nil })?.qualityPresetName
+        results.lazy.compactMap(\.qualityPresetName).first
     }
 
     /// The results kept for this title / episode, if recent enough.
