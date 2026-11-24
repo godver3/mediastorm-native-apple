@@ -27,6 +27,8 @@ struct SourcePickerView: View {
     @State private var tracksTarget: TracksTarget?
     /// A long press's release can also arrive as a Select; it is ignored until then.
     @State private var suppressSelectUntil = Date.distantPast
+    /// Other qualities (releases the quality preset rejected) are listed.
+    @State private var showsOtherQualities = false
 
     struct TracksTarget: Identifiable {
         let result: SourceResult
@@ -45,9 +47,12 @@ struct SourcePickerView: View {
             LazyVStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(heading).font(.title2.weight(.semibold))
-                    if !isLoading, error == nil, !results.isEmpty {
-                        Text(results.count == 1 ? "1 source" : "\(results.count) sources")
+                    if !isLoading, error == nil, !matched.isEmpty {
+                        Text(matched.count == 1 ? "1 source" : "\(matched.count) sources")
                             .font(.callout).foregroundStyle(.secondary)
+                    }
+                    if !isLoading, let preset = SourceSearch.rankedBy(results) {
+                        Text("Ranked by: \(preset)").font(.callout).foregroundStyle(.secondary)
                     }
                 }
                 .padding(.bottom, 24)
@@ -79,19 +84,18 @@ struct SourcePickerView: View {
                 } else if results.isEmpty {
                     Text("No sources found").foregroundStyle(.secondary)
                 } else {
-                    ForEach(results, id: \.index) { result in
-                        Button {
-                            guard Date() >= suppressSelectUntil else { return }
-                            dismiss()
-                            onPick(result, pick(for: result))
-                        } label: {
-                            SourceRow(result: result, health: health[result.index],
-                                      hasTrackPicks: !(trackOverrides[result.index]?.isEmpty ?? true))
+                    if matched.isEmpty {
+                        Text("No release matched the quality preset.").foregroundStyle(.secondary)
+                    }
+                    ForEach(matched, id: \.index) { resultButton($0) }
+                    if !others.isEmpty {
+                        Button { withAnimation { showsOtherQualities.toggle() } } label: {
+                            Label("Other qualities (\(others.count))",
+                                  systemImage: showsOtherQualities ? "chevron.down" : "chevron.right")
                         }
                         .buttonStyle(SourceRowStyle())
-                        .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
-                            showTracks(result)
-                        })
+                        .padding(.top, 24)
+                        if showsOtherQualities { ForEach(others, id: \.index) { resultButton($0) } }
                     }
                 }
             }
@@ -120,6 +124,25 @@ struct SourcePickerView: View {
                 }
             }
         }
+    }
+
+    /// The results the quality preset (if any) accepted, and the ones it rejected.
+    private var matched: [SourceResult] { results.filter { !$0.isOtherQuality } }
+    private var others: [SourceResult] { results.filter(\.isOtherQuality) }
+
+    private func resultButton(_ result: SourceResult) -> some View {
+        Button {
+            guard Date() >= suppressSelectUntil else { return }
+            dismiss()
+            onPick(result, pick(for: result))
+        } label: {
+            SourceRow(result: result, health: health[result.index],
+                      hasTrackPicks: !(trackOverrides[result.index]?.isEmpty ?? true))
+        }
+        .buttonStyle(SourceRowStyle())
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+            showTracks(result)
+        })
     }
 
     // MARK: Tracks

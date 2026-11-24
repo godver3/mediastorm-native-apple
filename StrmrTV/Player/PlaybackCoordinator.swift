@@ -32,6 +32,8 @@ final class PlaybackCoordinator: ObservableObject {
     /// A prequeue started as a details page opened, for whatever the server would play there
     /// (the movie, or the series' next-up episode). `resolveStream` adopts it once; the title,
     /// profile and start time stay behind so re-opening the page doesn't search again.
+    /// Bumped per warm prequeue, so a replaced one (a quality preset picked) stops updating `warm`.
+    private var warmGeneration = 0
     private var warmed: (titleID: String, profile: String, started: Date, prequeueID: Task<String?, Never>?)?
     private lazy var engine: AetherEngine? = {
         do {
@@ -57,7 +59,11 @@ final class PlaybackCoordinator: ObservableObject {
     func play(_ request: PlaybackRequest, picks: PrequeuePick? = nil) {
         if let version = request.preferredLibraryVersion { return playLibrary(request, version: version) }
         begin(request, stage: String(localized: "Searching…")) { [self] in
-            let resolved = try await resolveStream(request)
+            let resolved: PrequeueStatus
+            do { resolved = try await resolveStream(request) } catch let error as APIError {
+                guard case .notReady = error else { throw error }
+                throw QualityPresetStore.shared.explain(error, title: request.title)
+            }
             guard let path = resolved.streamPath else { throw APIError.notReady("Stream resolved without a path") }
             await TrackSettingsStore.shared.loadIfNeeded()
             let current = SourceSwitch.Current(resolved, path: path)
@@ -182,7 +188,7 @@ final class PlaybackCoordinator: ObservableObject {
         prefetched = (key, "")
         Task {
             do {
-                let started = try await api.startPrequeue(prequeueBody(request))
+                let started = try await startPrequeue(request)
                 if prefetched?.key == key { prefetched = (key, started.prequeueId) }
             } catch {
                 if prefetched?.key == key { prefetched = nil }
@@ -200,31 +206,33 @@ final class PlaybackCoordinator: ObservableObject {
            Date().timeIntervalSince(warmed.started) < 600 { return }
         // No episode or start point: the server targets the series' next-up episode, and the
         // start offset only matters to HLS, which this client skips.
-        let body = prequeueBody(PlaybackRequest(title: target, episode: nil, start: nil))
+        let warmRequest = PlaybackRequest(title: target, episode: nil, start: nil)
         warm = WarmPrequeue(titleID: target.titleID, profile: profile, phase: .resolving)
+        warmGeneration += 1
+        let generation = warmGeneration
         let task = Task { [api] () -> String? in
             guard await self.playbackSettings().prequeueOnOpen,
-                  let id = try? await api.startPrequeue(body).prequeueId else {
-                self.settleWarm(target.titleID, profile, .unavailable)
+                  let id = try? await self.startPrequeue(warmRequest).prequeueId else {
+                self.settleWarm(target.titleID, profile, .unavailable, generation)
                 return nil
             }
-            Task { await self.watchWarm(id, titleID: target.titleID, profile: profile) }
+            Task { await self.watchWarm(id, titleID: target.titleID, profile: profile, generation: generation) }
             return id
         }
         warmed = (target.titleID, profile, Date(), task)
     }
 
     /// Follows the details prequeue until it settles, for the page's Audio & Subtitles button.
-    private func watchWarm(_ id: String, titleID: String, profile: String) async {
+    private func watchWarm(_ id: String, titleID: String, profile: String, generation: Int) async {
         let deadline = Date().addingTimeInterval(180)
         let log = AppLog(category: "prequeue")
-        while Date() < deadline, warm?.titleID == titleID, warm?.profile == profile {
+        while Date() < deadline, warm?.titleID == titleID, warm?.profile == profile, warmGeneration == generation {
             do {
                 let status = try await api.prequeueStatus(id)
                 if status.status == "ready" {
                     log.notice("details prequeue \(id) ready: \(status.audioTracks?.count ?? 0) audio, "
                         + "\(status.subtitleTracks?.count ?? 0) subtitles")
-                    return settleWarm(titleID, profile, .ready(status))
+                    return settleWarm(titleID, profile, .ready(status), generation)
                 }
                 if status.status == "failed" || status.status == "expired" { break }
             } catch {
@@ -233,11 +241,11 @@ final class PlaybackCoordinator: ObservableObject {
             try? await Task.sleep(for: .milliseconds(1500))
         }
         log.notice("details prequeue \(id) unavailable")
-        settleWarm(titleID, profile, .unavailable)
+        settleWarm(titleID, profile, .unavailable, generation)
     }
 
-    private func settleWarm(_ titleID: String, _ profile: String, _ phase: WarmPrequeue.Phase) {
-        guard warm?.titleID == titleID, warm?.profile == profile, case .resolving = warm?.phase else { return }
+    private func settleWarm(_ titleID: String, _ profile: String, _ phase: WarmPrequeue.Phase, _ generation: Int) {
+        guard warmGeneration == generation, warm?.titleID == titleID, warm?.profile == profile, case .resolving = warm?.phase else { return }
         warm?.phase = phase
     }
 
@@ -293,8 +301,27 @@ final class PlaybackCoordinator: ObservableObject {
                 }
             }
         }
-        let started = try await api.startPrequeue(prequeueBody(request))
-        return try await awaitPrequeue(started.prequeueId)
+        return try await awaitPrequeue(try await startPrequeue(request).prequeueId)
+    }
+
+    /// Starts a prequeue; a picked quality preset the server refuses (400/403) is dropped and
+    /// the title's default used instead.
+    func startPrequeue(_ request: PlaybackRequest) async throws -> PrequeueStartResponse {
+        let presets = QualityPresetStore.shared
+        do {
+            return try await api.startPrequeue(prequeueBody(request))
+        } catch where QualityPresetStore.isPresetRefusal(error) && presets.picked(titleID: request.title.titleID) != nil {
+            presets.reject(titleID: request.title.titleID)
+            return try await api.startPrequeue(prequeueBody(request))
+        }
+    }
+
+    /// A quality preset was picked on `target`'s page: the warm prequeue, ranked with the old
+    /// one, is dropped and a new one started with the pick.
+    func restartWarm(_ target: DetailsTarget) {
+        if warmed?.titleID == target.titleID { warmed = nil }
+        if warm?.titleID == target.titleID { warm = nil }
+        prewarm(target)
     }
 
     private func prequeueBody(_ request: PlaybackRequest) -> [String: Any] {
@@ -319,6 +346,7 @@ final class PlaybackCoordinator: ObservableObject {
             if let numbering = ep.numbering { body["numbering"] = numbering.json }
         }
         if let start = request.startPosition { body["startOffset"] = start }
+        if let preset = QualityPresetStore.shared.picked(titleID: t.titleID) { body["qualityPreset"] = preset }
         return body
     }
 

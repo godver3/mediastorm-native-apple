@@ -82,6 +82,7 @@ extension DetailsView {
             if more.contains(.tracks), warmPrequeue != nil {
                 Button { showTracks() } label: { Label("Audio & Subtitles", systemImage: "waveform") }
             }
+            if more.contains(.quality) { qualityMoreItem }
             if more.contains(.trailer), trailer.available {
                 Button { trailer.buttonPressed() } label: {
                     Label(trailerPlaying ? "Pause Trailer" : "Play Trailer",

@@ -12,6 +12,7 @@ struct MobileDetailsView: View {
     @StateObject var model: MobileDetailsModel
     @ObservedObject var playback = PlaybackCoordinator.shared
     @ObservedObject var spoilers = SpoilerSettingsStore.shared
+    @ObservedObject var qualityPresets = QualityPresetStore.shared
     @EnvironmentObject var watchlist: WatchlistStore
     @EnvironmentObject var customLists: CustomListsStore
     @EnvironmentObject var titles: TitleStateStore
@@ -56,6 +57,7 @@ struct MobileDetailsView: View {
             ToolbarItem(placement: .topBarTrailing) { moreMenu }
         }
         .task { await model.load() }
+        .task { await qualityPresets.load(target) }
         .onAppear { playback.prewarm(target) }
         .onChange(of: playback.sessionsEnded) {
             model.prequeueOverrides = (nil, ManualTrackOverrides())

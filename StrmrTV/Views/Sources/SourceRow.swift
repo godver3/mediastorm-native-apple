@@ -19,6 +19,9 @@ struct SourceRow: View {
 
     private var badges: [String] {
         var out: [String] = []
+        // Ranked by a quality preset: its *arr quality ("WEB-2160p") and custom-format score.
+        if let arr = result.arrQuality { out.append(arr) }
+        if let score = result.customFormatScore, score != 0 { out.append(score > 0 ? "CF +\(score)" : "CF \(score)") }
         if let res = attrs["resolution"], !res.isEmpty { out.append(res == "2160p" ? "4K" : res) }
         if attrs["hasDV"] == "true" { out.append("DV") }
         if let hdr = attrs["hdr"], hdr.contains("HDR10+") { out.append("HDR10+") } else if let hdr = attrs["hdr"], hdr.contains("HDR") { out.append("HDR") }

@@ -19,7 +19,11 @@ extension APIClient {
     /// Manual-selection results from the backend's indexers / scrapers, annotated with
     /// debrid cache / usenet health (pending rows resolve via `sourceHealth(token:)`).
     /// `numbering` is the episode's ordering, so "S01E02" is searched for as that ordering's episode.
-    func searchSources(query: String, title: DetailsTarget, numbering: EpisodeNumbering? = nil) async throws -> [SourceResult] {
+    /// `qualityPreset` ranks with a preset picked on details; `includeFiltered` (a preset ranks
+    /// the title) also returns the releases the preset rejected, for Other qualities; other
+    /// filtered results are dropped.
+    func searchSources(query: String, title: DetailsTarget, numbering: EpisodeNumbering? = nil,
+                       qualityPreset: String? = nil, includeFiltered: Bool = false) async throws -> [SourceResult] {
         var q = ["q": query, "titleId": title.titleID, "mediaType": title.isMovie ? "movie" : "series",
                  "userId": profileID, "includeSourceHealth": "true", "limit": "50"]  // server default is 5
         if let imdb = title.imdbID { q["imdbId"] = imdb }
@@ -28,10 +32,13 @@ extension APIClient {
             q["episodeNumberingId"] = numbering.seriesId
             if let ordering = numbering.ordering, !ordering.isEmpty { q["episodeOrdering"] = ordering }
         }
+        if let qualityPreset { q["qualityPreset"] = qualityPreset }
+        if includeFiltered { q["includeFiltered"] = "true" }
         let data = try await sendRaw("GET", "/api/indexers/search", query: q,
                                      headers: AdaptiveThroughput.shared.requestHeaders())
         let list = (try JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
         return list.enumerated().compactMap { SourceResult($1, index: $0) }
+            .filter { !$0.isFiltered || $0.isOtherQuality }
     }
 
     /// Long-polls the pending source-health checks of one search.

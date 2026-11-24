@@ -21,6 +21,7 @@ extension MobileDetailsView {
                 if model.warmPrequeue?.status != nil {
                     Button { model.showTracks() } label: { Label("Audio & Subtitles", systemImage: "waveform") }
                 }
+                qualityMenu
                 Button { model.chooseSource(for: model.activeEpisode) } label: {
                     Label("Choose Source", systemImage: "magnifyingglass")
                 }

@@ -51,6 +51,7 @@ extension DetailsView {
                 .disabled(!canChooseSource)
             }
             if buttons.inRow(.tracks) { tracksButton }
+            if buttons.inRow(.quality) { qualityButton }
             if trailer.available, buttons.inRow(.trailer) {
                 Button { trailer.buttonPressed() } label: {
                     LoadingIconLabel(trailerPlaying ? "Pause Trailer" : "Play Trailer",

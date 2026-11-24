@@ -76,6 +76,7 @@ struct DetailsView: View {
     @State var systemMenuOpen = false
     /// Which secondary actions are in the row and which in More (`DetailsButtons`).
     @ObservedObject var buttons = DetailsButtonsStore.shared
+    @ObservedObject var qualityPresets = QualityPresetStore.shared
     @State var customizingButtons = false
     /// Series: the episode orderings on offer (`DetailsView+Ordering`), the one shown, and the
     /// one picked this visit (asked for explicitly on reload, as the Expo app does).
@@ -86,7 +87,7 @@ struct DetailsView: View {
     @State var watchTogetherPicking = false
     @State var openedRoom: WatchRoomRoute?
 
-    enum DetailsAction: String, Hashable { case primary, startOver, versions, chooseSource, tracks, trailer, watchlist, lists, watched, more }
+    enum DetailsAction: String, Hashable { case primary, startOver, versions, chooseSource, tracks, quality, trailer, watchlist, lists, watched, more }
 
     /// Every focusable on the page, so moves between rows can be steered.
     enum DetailsFocus: Hashable {
@@ -260,6 +261,7 @@ struct DetailsView: View {
         .onAppear { playback.prewarm(target) }
         .task { await infoLineStore.refresh() }
         .task { await load() }
+        .task { await qualityPresets.load(target) }
         .onReceive(DeepLinkRouter.shared.$autoplayTitleID) { _ in autoplayIfRequested() }
         .onChange(of: playback.sessionsEnded) {
             // The picks were for the prequeue that just played.
@@ -269,7 +271,7 @@ struct DetailsView: View {
         .bulkWatchConfirmation($pendingBulkWatch)
         .modifier(watchTogetherPresentation)
         .fullScreenCover(isPresented: $showPrequeueTracks) { prequeueTracksPage }
-        .fullScreenCover(isPresented: $customizingButtons) { DetailsButtonsSheet() }
+        .fullScreenCover(isPresented: $customizingButtons) { DetailsButtonsSheet(hidden: unofferedActions) }
         .modifier(libraryVersionsPresentation)
         .fullScreenCover(item: $sourcePicker) { picker in
             SourcePickerView(title: target, episode: picker.episode,

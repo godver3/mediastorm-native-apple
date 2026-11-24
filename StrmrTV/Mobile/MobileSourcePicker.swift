@@ -24,6 +24,7 @@ struct MobileSourcePicker: View {
     @State private var trackOverrides: [Int: ManualTrackOverrides] = [:]
     @State private var probes: [Int: SourceTrackProbe] = [:]
     @State private var tracksTarget: TracksTarget?
+    @State private var showsOtherQualities = false
 
     struct TracksTarget: Identifiable, Hashable {
         let result: SourceResult
@@ -75,34 +76,52 @@ struct MobileSourcePicker: View {
             } else if results.isEmpty {
                 ContentUnavailableView("No Sources Found", systemImage: "magnifyingglass")
             } else {
-                ForEach(results, id: \.index) { result in
-                    Button {
-                        dismiss()
-                        onPick(result, pick(for: result))
-                    } label: {
-                        SourceRow(result: result, health: health[result.index],
-                                  hasTrackPicks: !(trackOverrides[result.index]?.isEmpty ?? true))
-                    }
-                    .tint(.primary)
-                    .contextMenu {
-                        Button {
-                            dismiss()
-                            onPick(result, pick(for: result))
-                        } label: { Label("Play", systemImage: "play.fill") }
-                        Button { showTracks(result) } label: { Label("Audio & Subtitles…", systemImage: "waveform") }
-                    }
-                    .swipeActions(edge: .trailing) {
-                        Button { showTracks(result) } label: { Label("Tracks", systemImage: "waveform") }
-                            .tint(.indigo)
-                    }
+                if matched.isEmpty {
+                    Text("No release matched the quality preset.").foregroundStyle(.secondary)
                 }
+                ForEach(matched, id: \.index) { resultRow($0) }
             }
         } header: {
             if !libraryVersions.isEmpty || (!isLoading && !results.isEmpty) {
-                Text(results.isEmpty ? String(localized: "Streams")
-                                     : results.count == 1 ? String(localized: "1 source")
-                                                          : String(localized: "\(results.count) sources"))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(matched.isEmpty ? String(localized: "Streams")
+                                         : matched.count == 1 ? String(localized: "1 source")
+                                                              : String(localized: "\(matched.count) sources"))
+                    if let preset = SourceSearch.rankedBy(results) { Text("Ranked by: \(preset)") }
+                }
             }
+        }
+        if !isLoading, error == nil, !others.isEmpty {
+            Section {
+                DisclosureGroup("Other qualities (\(others.count))", isExpanded: $showsOtherQualities) {
+                    ForEach(others, id: \.index) { resultRow($0) }
+                }
+            }
+        }
+    }
+
+    private var matched: [SourceResult] { results.filter { !$0.isOtherQuality } }
+    private var others: [SourceResult] { results.filter(\.isOtherQuality) }
+
+    private func resultRow(_ result: SourceResult) -> some View {
+        Button {
+            dismiss()
+            onPick(result, pick(for: result))
+        } label: {
+            SourceRow(result: result, health: health[result.index],
+                      hasTrackPicks: !(trackOverrides[result.index]?.isEmpty ?? true))
+        }
+        .tint(.primary)
+        .contextMenu {
+            Button {
+                dismiss()
+                onPick(result, pick(for: result))
+            } label: { Label("Play", systemImage: "play.fill") }
+            Button { showTracks(result) } label: { Label("Audio & Subtitles…", systemImage: "waveform") }
+        }
+        .swipeActions(edge: .trailing) {
+            Button { showTracks(result) } label: { Label("Tracks", systemImage: "waveform") }
+                .tint(.indigo)
         }
     }
 

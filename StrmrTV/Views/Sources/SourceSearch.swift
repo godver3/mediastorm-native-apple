@@ -49,10 +49,33 @@ enum SourceSearch {
     /// Searches and keeps the results for this title / episode (the source picker, and
     /// Switch Source when nothing recent is kept).
     static func search(title: DetailsTarget, query: String, numbering: EpisodeNumbering? = nil) async throws -> [SourceResult] {
-        let results = ordered(try await APIClient.shared.searchSources(query: query, title: title, numbering: numbering))
+        let presets = QualityPresetStore.shared
+        let picked = presets.picked(titleID: title.titleID)
+        let ranked = presets.activePresetName(title) != nil
+        let api = APIClient.shared
+        let found: [SourceResult]
+        do {
+            found = try await api.searchSources(query: query, title: title, numbering: numbering,
+                                                qualityPreset: picked, includeFiltered: ranked)
+        } catch where picked != nil && QualityPresetStore.isPresetRefusal(error) {
+            // The picked preset is no longer offered: search with the title's default.
+            presets.reject(titleID: title.titleID)
+            found = try await api.searchSources(query: query, title: title, numbering: numbering, includeFiltered: ranked)
+        }
+        let results = ordered(found)
         snapshots[Key(titleID: title.titleID, query: query, ordering: numbering?.ordering)] =
             Snapshot(results: results, health: initialHealth(results), at: Date())
         return results
+    }
+
+    /// Drops the title's kept results (a quality preset was picked, so they rank differently).
+    static func forget(titleID: String) {
+        snapshots = snapshots.filter { $0.key.titleID != titleID }
+    }
+
+    /// The preset that ranked `results`, for the list's "Ranked by" header.
+    nonisolated static func rankedBy(_ results: [SourceResult]) -> String? {
+        results.first(where: { !$0.isOtherQuality && $0.qualityPresetName != nil })?.qualityPresetName
     }
 
     /// The results kept for this title / episode, if recent enough.

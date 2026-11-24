@@ -3,30 +3,40 @@ import SwiftUI
 /// Which of the details page's secondary actions sit in the action row and which are listed in
 /// More Options instead (Customize Buttons…, at the end of More). Play / Resume and More always
 /// stay in the row, in a fixed order, so a hidden button only closes its gap. Kept on the
-/// device, per profile; Manage Lists starts in More.
+/// device, per profile; Manage Lists and Quality start in More.
 @MainActor
 final class DetailsButtonsStore: ObservableObject {
     typealias Action = DetailsView.DetailsAction
 
     static let shared = DetailsButtonsStore()
-    static let defaultInMore: Set<Action> = [.lists]
+    static let defaultInMore: Set<Action> = [.lists, .quality]
+    /// The customizable actions before `Keys.known` was stored: a profile saved then hasn't
+    /// placed the ones added since, which start where their default puts them.
+    static let legacyCustomizable: [String] = ["startOver", "versions", "chooseSource", "tracks", "trailer",
+                                               "watchlist", "lists", "watched"]
 
     enum Keys {
         /// Actions in More, by profile id (raw values).
         static let inMore = "detailsButtons.inMore"
+        /// The customizable actions when the profile's choice was saved, by profile id.
+        static let known = "detailsButtons.known"
     }
 
     private let defaults: UserDefaults
     @Published private var saved: [String: [String]]
+    private var known: [String: [String]]
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         saved = defaults.dictionary(forKey: Keys.inMore) as? [String: [String]] ?? [:]
+        known = defaults.dictionary(forKey: Keys.known) as? [String: [String]] ?? [:]
     }
 
     func inMore(profileID: String = APIClient.shared.profileID) -> Set<Action> {
         guard let raw = saved[profileID] else { return Self.defaultInMore }
-        return Set(raw.compactMap(Action.init(rawValue:)))
+        let placed = Set(known[profileID] ?? Self.legacyCustomizable)
+        let unplaced = Self.defaultInMore.filter { !placed.contains($0.rawValue) }
+        return Set(raw.compactMap(Action.init(rawValue:))).union(unplaced)
     }
 
     func inRow(_ action: Action, profileID: String = APIClient.shared.profileID) -> Bool {
@@ -39,13 +49,15 @@ final class DetailsButtonsStore: ObservableObject {
         if shown { more.remove(action) } else { more.insert(action) }
         // In row order, so the stored list reads like the row.
         saved[profileID] = Action.customizable.filter(more.contains).map(\.rawValue)
+        known[profileID] = Action.customizable.map(\.rawValue)
         defaults.set(saved, forKey: Keys.inMore)
+        defaults.set(known, forKey: Keys.known)
     }
 }
 
 extension DetailsView.DetailsAction {
     /// The actions Customize Buttons lists, in row order.
-    static let customizable: [Self] = [.startOver, .versions, .chooseSource, .tracks, .trailer, .watchlist, .lists, .watched]
+    static let customizable: [Self] = [.startOver, .versions, .chooseSource, .tracks, .quality, .trailer, .watchlist, .lists, .watched]
 
     var title: String {
         switch self {
@@ -54,6 +66,7 @@ extension DetailsView.DetailsAction {
         case .versions: String(localized: "Versions")
         case .chooseSource: String(localized: "Choose Source")
         case .tracks: String(localized: "Audio & Subtitles")
+        case .quality: String(localized: "Quality")
         case .trailer: String(localized: "Trailer")
         case .watchlist: String(localized: "Watchlist")
         case .lists: String(localized: "Manage Lists")
@@ -69,6 +82,7 @@ extension DetailsView.DetailsAction {
         case .versions: "externaldrive"
         case .chooseSource: "magnifyingglass"
         case .tracks: "waveform"
+        case .quality: "dial.medium"
         case .trailer: "film"
         case .watchlist: "plus"
         case .lists: "text.badge.checkmark"
@@ -83,6 +97,8 @@ extension DetailsView.DetailsAction {
 /// other details pickers; Menu returns to the page.
 struct DetailsButtonsSheet: View {
     @ObservedObject var store = DetailsButtonsStore.shared
+    /// Actions the title doesn't offer (Quality without presets): not listed.
+    var hidden: Set<DetailsView.DetailsAction> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 30) {
@@ -90,7 +106,7 @@ struct DetailsButtonsSheet: View {
             Text("Choose where each button goes: in the row on the details page, or listed in More Options. Play and More Options always stay in the row. Saved on this Apple TV for this profile.")
                 .font(.system(size: 26)).foregroundStyle(.secondary)
             Form {
-                ForEach(DetailsView.DetailsAction.customizable, id: \.self) { action in
+                ForEach(DetailsView.DetailsAction.customizable.filter { !hidden.contains($0) }, id: \.self) { action in
                     let inRow = store.inRow(action)
                     Button { store.setInRow(action, !inRow) } label: {
                         HStack {
