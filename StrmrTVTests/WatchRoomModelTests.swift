@@ -118,4 +118,19 @@ final class WatchRoomModelTests: XCTestCase {
         XCTAssertNil(body["backdropUrl"], "an empty URL is left out")
         XCTAssertEqual(body["inviteeProfileIds"] as? [String], ["a"])
     }
+
+    func testDecodesTheRoomsEpisodeAndSendsItOnCreate() throws {
+        XCTAssertNil(try decode(WatchRoom.self, Self.roomJSON).episode, "absent on old rooms")
+        let room = try decode(WatchRoom.self, """
+        {"id":"r","mediaType":"series","episode":{"seasonNumber":2,"episodeNumber":5,"episodeId":"e","title":"Five"}}
+        """)
+        XCTAssertEqual(room.episode, WatchRoomEpisode(seasonNumber: 2, episodeNumber: 5, episodeId: "e", title: "Five"))
+        XCTAssertNil(try decode(WatchRoom.self, #"{"id":"r","episode":{"bogus":1}}"#).episode, "malformed reads as none")
+        let create = WatchRoomCreate(title: "T", mediaType: "series", itemId: "i", params: [:], inviteeProfileIds: [],
+                                     episode: WatchRoomEpisode(seasonNumber: 1, episodeNumber: 2))
+        let body = create.json["episode"] as? [String: Any]
+        XCTAssertEqual(body?["seasonNumber"] as? Int, 1)
+        XCTAssertEqual(body?["episodeNumber"] as? Int, 2)
+        XCTAssertNil(body?["episodeId"])
+    }
 }

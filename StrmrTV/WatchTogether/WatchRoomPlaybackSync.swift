@@ -8,6 +8,8 @@ protocol WatchRoomSyncedPlayer: AnyObject {
     var syncDuration: Double { get }
     var syncPaused: Bool { get }
     var syncBuffering: Bool { get }
+    /// Played to the end (a guest holding for the host's next episode): nothing to report.
+    var syncEnded: Bool { get }
     /// Seeks (when `seek` is set) and pauses or plays, to the room's state.
     func applyRoomState(seek: Double?, paused: Bool)
 }
@@ -24,6 +26,8 @@ final class WatchRoomPlaybackSync {
     let launch: WatchRoomLaunch
     /// What plays, for the item-mismatch check (the title's ID, without an episode).
     private let playingItem: String
+    /// The episode that plays (nil for a movie).
+    private let playingEpisode: WatchRoomEpisode?
     private let resumePosition: Double
     private weak var player: WatchRoomSyncedPlayer?
     private let api = APIClient.shared
@@ -32,6 +36,8 @@ final class WatchRoomPlaybackSync {
     var onRoom: ((WatchRoom?) -> Void)?
     /// The room ended (or is gone): the player returns to the lobby.
     var onEnded: (() -> Void)?
+    /// Guest: the host plays another episode; the player switches to it (the room as polled).
+    var onFollowEpisode: ((WatchRoom) -> Void)?
 
     private var loop: Task<Void, Never>?
     private var lastRevision: Int64 = -1
@@ -45,14 +51,23 @@ final class WatchRoomPlaybackSync {
     private var waitingForReady = false
     private var presenceSignature = ""
     private var ended = false
+    /// Guest in a room that names its episode: at this episode's end the player holds paused
+    /// for the host's next one (no up next, no closing).
+    private(set) var holdsAtEnd = false
+    /// Host: this player's episode was posted once (an older server ignores it; don't repeat).
+    private var announced = false
+    /// Guest: switching to the room's episode; this sync is done.
+    private var following = false
     private var gate = Rules.ReportGate()
     /// Back from the background: the next poll re-applies the room's state whatever its revision.
     private var reapply = false
     private var observers: [NSObjectProtocol] = []
 
-    init(launch: WatchRoomLaunch, playingItem: String, resumePosition: Double?, player: WatchRoomSyncedPlayer) {
+    init(launch: WatchRoomLaunch, playingItem: String, playingEpisode: WatchRoomEpisode?, resumePosition: Double?,
+         player: WatchRoomSyncedPlayer) {
         self.launch = launch
         self.playingItem = playingItem
+        self.playingEpisode = playingEpisode
         self.resumePosition = max(0, resumePosition ?? 0)
         self.player = player
     }
@@ -83,7 +98,7 @@ final class WatchRoomPlaybackSync {
         loop = nil
         observers.forEach(NotificationCenter.default.removeObserver)
         observers = []
-        if waitingForReady, readyReported, !ended {
+        if waitingForReady, readyReported, !ended, !following {
             let room = launch.roomID
             Task { try? await APIClient.shared.setWatchRoomReady(room, ready: false) }
         }
@@ -108,7 +123,7 @@ final class WatchRoomPlaybackSync {
     private var isActive: Bool { UIApplication.shared.applicationState == .active }
 
     private func tick() async {
-        guard !ended, isActive, let player else { return }
+        guard !ended, !following, isActive, let player else { return }
         let now = Date.now
         if !pollInFlight, now.timeIntervalSince(lastPoll) >= Rules.pollInterval {
             lastPoll = now
@@ -130,21 +145,47 @@ final class WatchRoomPlaybackSync {
     private func poll() async {
         do {
             var room = try await api.watchRoom(launch.roomID)
-            guard !ended, let player else { return }
+            guard !ended, !following, let player else { return }
             if room.isEnded { return end(room) }
+            holdsAtEnd = !launch.isHost && room.episode != nil
+            let mismatch = Rules.isMismatch(roomItem: room.itemId, playing: playingItem)
+            let first = lastRevision < 0
+            let seedResume = Rules.shouldSeedHostResume(isHost: launch.isHost, firstSnapshot: first,
+                                                        resume: resumePosition, roomPosition: room.position)
+            var seeded = false
+            switch Rules.episodeAction(isHost: launch.isHost, roomEpisode: room.episode, playing: playingEpisode,
+                                       itemMismatch: mismatch) {
+            case let .follow(episode):
+                // Not ready here: the room waits for this member to load the host's episode.
+                log.notice("room \(launch.roomID) plays \(episode.code); switching from \(playingEpisode?.code ?? playingItem)")
+                following = true
+                loop?.cancel()
+                loop = nil
+                onFollowEpisode?(room)
+                return
+            case let .announce(episode) where !announced:
+                seeded = seedResume
+                let position = seedResume ? resumePosition : max(0, player.syncPosition)
+                log.notice("announcing \(episode.code) to room \(launch.roomID) at \(Int(position))s")
+                room = try await api.updateWatchRoomState(launch.roomID, playing: room.status != .paused,
+                                                          position: position,
+                                                          duration: max(room.duration, player.syncDuration),
+                                                          expectedRevision: room.revision, episode: episode)
+                announced = true
+            default:
+                break
+            }
             if room.waitingForReady, !readyReported {
                 room = try await api.setWatchRoomReady(launch.roomID, ready: true)
                 readyReported = true
                 log.notice("player ready reported for room \(launch.roomID)")
             }
             waitingForReady = room.waitingForReady
-            if Rules.isMismatch(roomItem: room.itemId, playing: playingItem) {
+            if mismatch {
                 publish(nil)
                 return
             }
-            let first = lastRevision < 0
-            if Rules.shouldSeedHostResume(isHost: launch.isHost, firstSnapshot: first, resume: resumePosition,
-                                          roomPosition: room.position) {
+            if seedResume, !seeded {
                 log.notice("seeding host resume \(Int(self.resumePosition))s over room position \(Int(room.position))s")
                 room = try await api.updateWatchRoomState(launch.roomID, playing: room.status != .paused,
                                                           position: resumePosition,
@@ -186,7 +227,7 @@ final class WatchRoomPlaybackSync {
     // MARK: Player → room
 
     private func detectLocalChange(_ player: WatchRoomSyncedPlayer, now: Date) {
-        guard now >= applyingRemoteUntil, gate.allowsReporting(at: now) else {
+        guard !player.syncEnded, now >= applyingRemoteUntil, gate.allowsReporting(at: now) else {
             if !gate.allowsReporting(at: now) { local = nil }
             return
         }

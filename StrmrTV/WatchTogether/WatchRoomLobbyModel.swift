@@ -59,6 +59,12 @@ final class WatchRoomLobbyModel: ObservableObject {
     var backdropURL: String? { room?.backdropUrl ?? accountInvitation?.backdropUrl }
     /// Playback has started: the lobby offers to (re)join it.
     var isPlaying: Bool { room.map { $0.status == .playing || $0.status == .paused } ?? false }
+    /// The host's episode while playback runs (Rejoin Playback starts it; the lobby never reopens
+    /// the player by itself when the host moves on).
+    var hostEpisodeText: String? {
+        guard isPlaying, let episode = room?.episode else { return nil }
+        return String(localized: "Host is on \(episode.code)")
+    }
 
     // MARK: Polling
 

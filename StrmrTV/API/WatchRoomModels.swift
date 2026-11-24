@@ -18,6 +18,29 @@ struct WatchRoomCapabilities: Codable, Hashable, Sendable {
     }
 }
 
+/// The episode a series room plays: the host's, which guests follow. Absent for movies and
+/// rooms from older servers or hosts (each member then plays their own next-up episode).
+struct WatchRoomEpisode: Codable, Hashable, Sendable {
+    var seasonNumber: Int
+    var episodeNumber: Int
+    var episodeId: String?
+    var title: String?
+
+    /// Same episode: season and number decide (IDs and titles are informational).
+    func same(_ other: WatchRoomEpisode?) -> Bool {
+        other.map { $0.seasonNumber == seasonNumber && $0.episodeNumber == episodeNumber } ?? false
+    }
+
+    var code: String { String(format: "S%02dE%02d", seasonNumber, episodeNumber) }
+
+    var json: [String: Any] {
+        var body: [String: Any] = ["seasonNumber": seasonNumber, "episodeNumber": episodeNumber]
+        if let episodeId, !episodeId.isEmpty { body["episodeId"] = episodeId }
+        if let title, !title.isEmpty { body["title"] = title }
+        return body
+    }
+}
+
 struct WatchRoomMember: Decodable, Hashable, Identifiable, Sendable {
     let profileId: String
     let name: String
@@ -91,6 +114,8 @@ struct WatchRoom: Decodable, Hashable, Identifiable, Sendable {
     /// `host_ended`, `host_disconnected`, `all_left` or `expired`.
     let endReason: String?
     let members: [WatchRoomMember]
+    /// The host's episode (series rooms from servers that track it).
+    let episode: WatchRoomEpisode?
 
     /// Unknown statuses read as `lobby`, so a newer server can't stop the app following one.
     var status: Status { Status(rawValue: statusRaw) ?? .lobby }
@@ -118,7 +143,7 @@ struct WatchRoom: Decodable, Hashable, Identifiable, Sendable {
         case id, creatorProfileId, creatorName, title, mediaType, itemId, posterUrl, backdropUrl, params
         case statusRaw = "status"
         case waitingForReady, position, duration, revision, updatedBy, anchorUpdatedAt, createdAt, expiresAt
-        case endedAt, endReason, members
+        case endedAt, endReason, members, episode
     }
 
     init(from decoder: Decoder) throws {
@@ -145,6 +170,8 @@ struct WatchRoom: Decodable, Hashable, Identifiable, Sendable {
         endedAt = try c.decodeIfPresent(String.self, forKey: .endedAt)
         endReason = try c.decodeIfPresent(String.self, forKey: .endReason)
         members = try c.decodeIfPresent([WatchRoomMember].self, forKey: .members) ?? []
+        // A malformed episode reads as none (legacy behaviour) rather than failing the room.
+        episode = try? c.decodeIfPresent(WatchRoomEpisode.self, forKey: .episode)
     }
 }
 
@@ -209,6 +236,8 @@ struct WatchRoomCreate {
     var backdropUrl: String?
     var params: [String: String]
     var inviteeProfileIds: [String]
+    /// The episode the host starts with, when the details page has one.
+    var episode: WatchRoomEpisode? = nil
 
     var json: [String: Any] {
         var body: [String: Any] = [
@@ -218,6 +247,7 @@ struct WatchRoomCreate {
         ]
         if let posterUrl, !posterUrl.isEmpty { body["posterUrl"] = posterUrl }
         if let backdropUrl, !backdropUrl.isEmpty { body["backdropUrl"] = backdropUrl }
+        if let episode { body["episode"] = episode.json }
         return body
     }
 }

@@ -30,10 +30,12 @@ extension APIClient {
     }
 
     /// Moves the room's playback. A 409 means another member moved it first (stale
-    /// `expectedRevision`); the next poll brings the new state.
+    /// `expectedRevision`); the next poll brings the new state. Only the host may send a new
+    /// `episode` (the server then waits for every member to load it again).
     func updateWatchRoomState(_ roomID: String, playing: Bool, position: Double, duration: Double? = nil,
-                              expectedRevision: Int64? = nil) async throws -> WatchRoom {
+                              expectedRevision: Int64? = nil, episode: WatchRoomEpisode? = nil) async throws -> WatchRoom {
         var body: [String: Any] = ["status": playing ? "playing" : "paused", "position": max(0, position)]
+        if let episode { body["episode"] = episode.json }
         if let duration, duration > 0 { body["duration"] = duration }
         if let expectedRevision { body["expectedRevision"] = expectedRevision }
         return try await send("POST", roomPath(roomID, "/state"), jsonObject: body, promptOnLock: false, timeout: 20)

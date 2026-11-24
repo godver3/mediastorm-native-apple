@@ -10,6 +10,7 @@ extension PlayerViewController: WatchRoomSyncedPlayer {
     var syncDuration: Double { engine.duration > 0 ? engine.duration : lastKnownDuration }
     var syncPaused: Bool { engine.state == .paused }
     var syncBuffering: Bool { engine.isBuffering }
+    var syncEnded: Bool { engine.state == .ended }
 
     func applyRoomState(seek: Double?, paused: Bool) {
         Task { [weak self] in
@@ -29,6 +30,7 @@ extension PlayerViewController: WatchRoomSyncedPlayer {
     func startWatchTogether() {
         guard let launch = request.watchRoom, watchSync == nil else { return }
         let sync = WatchRoomPlaybackSync(launch: launch, playingItem: request.title.titleID,
+                                         playingEpisode: request.episode.map(WatchRoomEpisode.init),
                                          resumePosition: launch.isHost && launch.position == nil ? request.startPosition : nil,
                                          player: self)
         sync.onRoom = { [weak self] room in self?.showPresence(room) }
@@ -37,9 +39,33 @@ extension PlayerViewController: WatchRoomSyncedPlayer {
             log.notice("watch room ended; leaving the player")
             dismiss(animated: true)
         }
+        sync.onFollowEpisode = { [weak self] room in self?.followRoomEpisode(room) }
         watchSync = sync
         sync.start()
         bindWatchPartySourceIfHost(launch)
+    }
+
+    /// Guest: the host moved to another episode. Holds this one paused while the room's episode
+    /// resolves, then starts it over the preparing overlay; its sync reports ready.
+    private func followRoomEpisode(_ room: WatchRoom) {
+        guard !didFinish, !isAdvancing else { return }
+        isAdvancing = true
+        stopCountdown()
+        engine.pause()
+        let profile = APIClient.shared.profileID
+        Task { [weak self] in
+            do {
+                var next = try await WatchRoomPlaybackStarter.request(for: room, profileID: profile)
+                guard let self, !didFinish else { return }
+                next.speed = playbackSpeed
+                log.notice("watch room: following the host to \(next.episode?.code ?? "?")")
+                dismiss(animated: true) { PlaybackCoordinator.shared.play(next) }
+            } catch {
+                guard let self, !didFinish else { return }
+                log.error("watch room: loading the host's episode failed: \(error.localizedDescription)")
+                dismiss(animated: true)
+            }
+        }
     }
 
     func stopWatchTogether() {

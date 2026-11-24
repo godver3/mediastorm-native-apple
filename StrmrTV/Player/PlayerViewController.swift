@@ -41,7 +41,12 @@ final class PlayerViewController: EnginePlayerViewController {
     // Up next. The next episode's prequeue starts near the end; with the profile's credits
     // auto-skip on, the Next Episode button counts down and plays it by itself.
     /// A watch room's playback doesn't run on into the next episode: the room is for one title.
-    lazy var nextEpisode = request.watchRoom == nil ? request.nextEpisode : nil
+    /// In a watch room only the host advances; the next episode follows the same room.
+    lazy var nextEpisode: PlaybackRequest? = request.watchRoom.map { launch in
+        guard WatchRoomSyncRules.allowsUpNext(isHost: launch.isHost), var next = self.request.nextEpisode else { return nil }
+        next.watchRoom = WatchRoomLaunch(roomID: launch.roomID, itemID: launch.itemID, isHost: true, position: nil)
+        return next
+    } ?? self.request.nextEpisode
     var creditsAutoSkip = false
     /// Settings › Playback › Credits Detection (`PlayerViewController+Credits`).
     var creditsDetectionEnabled = false
@@ -306,6 +311,8 @@ final class PlayerViewController: EnginePlayerViewController {
             reportProgress(ended: true)
             if let nextEpisode {
                 playNext(nextEpisode)
+            } else if watchSync?.holdsAtEnd == true {
+                log.notice("watch room: episode ended; waiting for the host's next")
             } else {
                 dismiss(animated: true)
             }

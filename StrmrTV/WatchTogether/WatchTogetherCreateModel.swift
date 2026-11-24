@@ -51,9 +51,10 @@ final class WatchTogetherCreateModel: ObservableObject {
         created = nil
     }
 
-    /// Creates the room for `target` (`logoURL` / `overview` from the loaded details), invites
+    /// Creates the room for `target` (`logoURL` / `overview` from the loaded details; `episode`, the
+    /// series episode the host starts with, when the page has one), invites
     /// the account named, and hands the lobby route back through `created`.
-    func create(_ target: DetailsTarget, logoURL: String?, overview: String?) async {
+    func create(_ target: DetailsTarget, logoURL: String?, overview: String?, episode: WatchRoomEpisode? = nil) async {
         guard !creating else { return }
         creating = true
         defer { creating = false }
@@ -61,7 +62,8 @@ final class WatchTogetherCreateModel: ObservableObject {
         let create = WatchRoomCreate(title: target.name, mediaType: target.isMovie ? "movie" : "series",
                                      itemId: target.titleID, posterUrl: target.posterURL,
                                      backdropUrl: target.backdropURL ?? target.posterURL, params: params,
-                                     inviteeProfileIds: invitees.sorted())
+                                     inviteeProfileIds: invitees.sorted(),
+                                     episode: target.isMovie ? nil : episode)
         do {
             let room = try await APIClient.shared.createWatchRoom(create)
             WatchTogetherSession.shared.setActive(room)

@@ -16,6 +16,40 @@ final class WatchRoomSyncTests: XCTestCase {
         XCTAssertFalse(Rules.isMismatch(roomItem: "", playing: "tmdb:tv:42"), "an unknown item never mismatches")
     }
 
+    private func ep(_ season: Int, _ episode: Int) -> WatchRoomEpisode {
+        WatchRoomEpisode(seasonNumber: season, episodeNumber: episode)
+    }
+
+    func testHostAnnouncesTheEpisodeItPlays() {
+        XCTAssertEqual(Rules.episodeAction(isHost: true, roomEpisode: ep(1, 1), playing: ep(1, 2), itemMismatch: false),
+                       .announce(ep(1, 2)), "host advanced (up next)")
+        XCTAssertEqual(Rules.episodeAction(isHost: true, roomEpisode: nil, playing: ep(1, 1), itemMismatch: false),
+                       .announce(ep(1, 1)), "a room without one learns the host's")
+        XCTAssertEqual(Rules.episodeAction(isHost: true, roomEpisode: ep(1, 2), playing: ep(1, 2), itemMismatch: false), .none)
+        XCTAssertEqual(Rules.episodeAction(isHost: true, roomEpisode: nil, playing: nil, itemMismatch: false), .none,
+                       "movie")
+        XCTAssertEqual(Rules.episodeAction(isHost: true, roomEpisode: ep(1, 1), playing: ep(1, 2), itemMismatch: true), .none)
+    }
+
+    func testGuestFollowsTheHostsEpisode() {
+        XCTAssertEqual(Rules.episodeAction(isHost: false, roomEpisode: ep(1, 3), playing: ep(1, 2), itemMismatch: false),
+                       .follow(ep(1, 3)))
+        XCTAssertEqual(Rules.episodeAction(isHost: false, roomEpisode: ep(2, 1), playing: nil, itemMismatch: true),
+                       .follow(ep(2, 1)), "the room's episode names what to play on another item")
+        XCTAssertEqual(Rules.episodeAction(isHost: false, roomEpisode: ep(1, 3), playing: ep(1, 3), itemMismatch: false), .none)
+        XCTAssertEqual(
+            Rules.episodeAction(isHost: false, roomEpisode: WatchRoomEpisode(seasonNumber: 1, episodeNumber: 3, episodeId: "x"),
+                                playing: WatchRoomEpisode(seasonNumber: 1, episodeNumber: 3, title: "T"), itemMismatch: false),
+            .none, "IDs and titles don't decide")
+    }
+
+    func testRoomWithoutAnEpisodeKeepsLegacyBehaviour() {
+        XCTAssertEqual(Rules.episodeAction(isHost: false, roomEpisode: nil, playing: ep(1, 2), itemMismatch: false), .none)
+        XCTAssertEqual(Rules.episodeAction(isHost: false, roomEpisode: nil, playing: ep(1, 2), itemMismatch: true), .none)
+        XCTAssertTrue(Rules.allowsUpNext(isHost: true))
+        XCTAssertFalse(Rules.allowsUpNext(isHost: false))
+    }
+
     func testSeeksOnlyBeyondOneAndAHalfSeconds() {
         XCTAssertFalse(Rules.shouldSeek(current: 100, target: 101.4))
         XCTAssertTrue(Rules.shouldSeek(current: 100, target: 101.6))

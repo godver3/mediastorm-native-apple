@@ -59,6 +59,31 @@ enum WatchRoomSyncRules {
         return !expected.isEmpty && !current.isEmpty && expected != current
     }
 
+    /// What a player does about the room's episode.
+    enum EpisodeAction: Equatable {
+        /// Nothing: same episode, a movie, or a room without one (legacy: everyone plays their own).
+        case none
+        /// Host: the room doesn't have the episode this player plays yet; post it.
+        case announce(WatchRoomEpisode)
+        /// Guest: the host plays another episode (or this player is on another item); switch to it.
+        case follow(WatchRoomEpisode)
+    }
+
+    /// The host leads the room's episode; guests follow it. A guest follows even when the item
+    /// mismatches, since the room's episode names what to play.
+    static func episodeAction(isHost: Bool, roomEpisode: WatchRoomEpisode?, playing: WatchRoomEpisode?,
+                              itemMismatch: Bool) -> EpisodeAction {
+        if isHost {
+            guard !itemMismatch, let playing, !playing.same(roomEpisode) else { return .none }
+            return .announce(playing)
+        }
+        guard let roomEpisode else { return .none }
+        return itemMismatch || !roomEpisode.same(playing) ? .follow(roomEpisode) : .none
+    }
+
+    /// Up Next in a room: only the host advances (the guests follow the room's episode).
+    static func allowsUpNext(isHost: Bool) -> Bool { isHost }
+
     static func shouldSeek(current: Double, target: Double) -> Bool {
         abs(current - target) > seekThreshold
     }

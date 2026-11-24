@@ -103,6 +103,7 @@ struct WatchRoomView: View {
         HStack(spacing: 30) {
             if model.isPlaying {
                 Button { model.openTitle() } label: { Label(model.opened ? "Rejoin Playback" : "Join Playback", systemImage: "play.fill") }
+                if let episode = model.hostEpisodeText { Text(episode).foregroundStyle(.secondary) }
             } else if model.isHost {
                 Button { Task { await model.startPlayback() } } label: { Label("Start", systemImage: "play.fill") }
             } else if let me = model.me {
