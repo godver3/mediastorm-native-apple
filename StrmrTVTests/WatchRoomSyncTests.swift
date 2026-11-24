@@ -59,6 +59,28 @@ final class WatchRoomSyncTests: XCTestCase {
         XCTAssertNil(Rules.hostResumeSeed(launch: WatchRoomLaunch(roomID: "r", itemID: "i", isHost: false, position: nil), start: 36))
     }
 
+    func testReadyIsReportedAgainAfterAnEpisodeChangeResetsIt() {
+        let t0 = Date(timeIntervalSince1970: 1000)
+        func report(_ waiting: Bool, ready: Bool = false, on: Bool = true, rev: Int64,
+                    last: (Int64, Date)?, at: Date) -> Bool {
+            Rules.shouldReportReady(waiting: waiting, memberReady: ready, onRoomItem: on, revision: rev,
+                                    lastReport: last.map { (revision: $0.0, at: $0.1) }, now: at)
+        }
+        XCTAssertTrue(report(true, rev: 1, last: nil, at: t0), "first wait")
+        XCTAssertTrue(report(true, rev: 2, last: (1, t0), at: t0.addingTimeInterval(0.5)),
+                      "the host's episode change reset readiness on a player already on that episode")
+        XCTAssertFalse(report(true, rev: 2, last: (2, t0), at: t0.addingTimeInterval(1)), "no hammering")
+        XCTAssertTrue(report(true, rev: 2, last: (2, t0), at: t0.addingTimeInterval(2)), "retry after 2 s")
+        XCTAssertFalse(report(true, ready: true, rev: 2, last: nil, at: t0), "the server has it")
+        XCTAssertFalse(report(false, rev: 2, last: nil, at: t0), "not waiting")
+        XCTAssertFalse(report(true, on: false, rev: 2, last: nil, at: t0), "on another item")
+    }
+
+    func testNoLocalChangesArePostedWhileTheRoomWaits() {
+        XCTAssertFalse(Rules.reportsLocalChanges(waitingForReady: true))
+        XCTAssertTrue(Rules.reportsLocalChanges(waitingForReady: false))
+    }
+
     func testSeeksOnlyBeyondOneAndAHalfSeconds() {
         XCTAssertFalse(Rules.shouldSeek(current: 100, target: 101.4))
         XCTAssertTrue(Rules.shouldSeek(current: 100, target: 101.6))

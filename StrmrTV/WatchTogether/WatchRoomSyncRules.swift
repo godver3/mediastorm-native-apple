@@ -99,6 +99,23 @@ enum WatchRoomSyncRules {
         launch.isHost && launch.position == nil && launch.seedsResume ? start : nil
     }
 
+    /// A ready report goes out again at most this often for the same revision.
+    static let readyRetry: TimeInterval = 2
+
+    /// Whether to report ready on this poll: the room waits, the server has this member as not
+    /// ready (an episode change resets everyone, even a player already on that episode), and
+    /// this player is on the room's item. Once per revision, or again after `readyRetry`.
+    static func shouldReportReady(waiting: Bool, memberReady: Bool, onRoomItem: Bool, revision: Int64,
+                                  lastReport: (revision: Int64, at: Date)?, now: Date) -> Bool {
+        guard waiting, !memberReady, onRoomItem else { return false }
+        guard let lastReport else { return true }
+        return lastReport.revision != revision || now.timeIntervalSince(lastReport.at) >= readyRetry
+    }
+
+    /// Local pauses, plays and seeks are reported only while the room isn't waiting for its
+    /// players: the player is held paused then, and posting would only add revisions.
+    static func reportsLocalChanges(waitingForReady: Bool) -> Bool { !waitingForReady }
+
     /// Whether playback changed locally since `previous`: paused or resumed, or a position
     /// more than 2.5 s from where it should be by now.
     static func localChange(from previous: Sample, to now: Sample) -> Bool {

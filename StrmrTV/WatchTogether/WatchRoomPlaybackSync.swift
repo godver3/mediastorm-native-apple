@@ -48,6 +48,7 @@ final class WatchRoomPlaybackSync {
     private var heartbeatPosition: Double?
     private var pollInFlight = false
     private var readyReported = false
+    private var lastReadyReport: (revision: Int64, at: Date)?
     private var waitingForReady = false
     private var presenceSignature = ""
     private var ended = false
@@ -175,10 +176,14 @@ final class WatchRoomPlaybackSync {
             default:
                 break
             }
-            if room.waitingForReady, !readyReported {
+            if Rules.shouldReportReady(waiting: room.waitingForReady,
+                                       memberReady: room.member(api.profileID)?.ready ?? false,
+                                       onRoomItem: !mismatch, revision: room.revision,
+                                       lastReport: lastReadyReport, now: .now) {
+                lastReadyReport = (room.revision, .now)
                 room = try await api.setWatchRoomReady(launch.roomID, ready: true)
                 readyReported = true
-                log.notice("player ready reported for room \(launch.roomID)")
+                log.notice("player ready reported for room \(launch.roomID) (revision \(room.revision))")
             }
             waitingForReady = room.waitingForReady
             if mismatch {
@@ -235,7 +240,7 @@ final class WatchRoomPlaybackSync {
         defer { local = sample }
         guard let previous = local, Rules.localChange(from: previous, to: sample) else { return }
         // While the room waits for every player, its pause is the room's, not a viewer's.
-        if waitingForReady, sample.paused { return }
+        guard Rules.reportsLocalChanges(waitingForReady: waitingForReady) else { return }
         let expected = lastRevision >= 0 ? lastRevision : nil
         log.info("local change: \(sample.paused ? "paused" : "playing") at \(Int(sample.position))s")
         let room = launch.roomID, duration = player.syncDuration
