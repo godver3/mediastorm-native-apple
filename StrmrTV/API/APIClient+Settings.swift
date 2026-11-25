@@ -19,6 +19,9 @@ extension APIClient {
         /// Frames near the end are read for credit text when no credits range is known
         /// (`playback.creditsDetectionEnabled`, off by default).
         var creditsDetectionEnabled = false
+        /// A recording's commercial breaks are jumped over by themselves
+        /// (`playback.commercialAutoSkip`, off by default).
+        var commercialAutoSkip = false
     }
 
     func playbackSettings() async -> PlaybackSettings {
@@ -28,11 +31,12 @@ extension APIClient {
             let disablePrequeue: Bool?
             let autoPlayTrailersTV: Bool?
             let creditsDetectionEnabled: Bool?
+            let commercialAutoSkip: Bool?
             /// The `subtitle*` fields of the same object.
             let style: SubtitleStyle.Server?
             var autoSkip: Bool? { creditsAutoSkip ?? creditsDetection }
 
-            private enum CodingKeys: String, CodingKey { case creditsAutoSkip, creditsDetection, disablePrequeue, autoPlayTrailersTV, creditsDetectionEnabled }
+            private enum CodingKeys: String, CodingKey { case creditsAutoSkip, creditsDetection, disablePrequeue, autoPlayTrailersTV, creditsDetectionEnabled, commercialAutoSkip }
             init(from decoder: Decoder) throws {
                 let c = try decoder.container(keyedBy: CodingKeys.self)
                 creditsAutoSkip = try c.decodeIfPresent(Bool.self, forKey: .creditsAutoSkip)
@@ -40,6 +44,7 @@ extension APIClient {
                 disablePrequeue = try c.decodeIfPresent(Bool.self, forKey: .disablePrequeue)
                 autoPlayTrailersTV = try c.decodeIfPresent(Bool.self, forKey: .autoPlayTrailersTV)
                 creditsDetectionEnabled = try c.decodeIfPresent(Bool.self, forKey: .creditsDetectionEnabled)
+                commercialAutoSkip = try c.decodeIfPresent(Bool.self, forKey: .commercialAutoSkip)
                 style = try? SubtitleStyle.Server(from: decoder)
             }
         }
@@ -55,7 +60,8 @@ extension APIClient {
             prequeueOnOpen: !(d?.disablePrequeue ?? u?.disablePrequeue ?? false),
             subtitleStyle: d?.style.map { $0.merged(over: u?.style) } ?? u?.style,
             autoPlayTrailers: d?.autoPlayTrailersTV ?? u?.autoPlayTrailersTV ?? false,
-            creditsDetectionEnabled: d?.creditsDetectionEnabled ?? u?.creditsDetectionEnabled ?? false)
+            creditsDetectionEnabled: d?.creditsDetectionEnabled ?? u?.creditsDetectionEnabled ?? false,
+            commercialAutoSkip: d?.commercialAutoSkip ?? u?.commercialAutoSkip ?? false)
     }
 }
 

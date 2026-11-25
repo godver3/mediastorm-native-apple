@@ -161,6 +161,11 @@ final class PlaybackCoordinator: ObservableObject {
         return (settings.creditsAutoSkip, settings.creditsDetectionEnabled)
     }
 
+    /// The profile's commercial auto-skip, for recordings.
+    func commercialAutoSkip() async -> Bool {
+        await playbackSettings().commercialAutoSkip
+    }
+
     /// The profile's playback settings, re-read at most every five minutes (or on a profile switch).
     private func playbackSettings() async -> APIClient.PlaybackSettings {
         let profile = api.profileID

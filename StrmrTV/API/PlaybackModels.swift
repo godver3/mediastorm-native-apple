@@ -114,7 +114,7 @@ struct TrackSelection: Decodable, Hashable {
 // MARK: - Skip segments
 
 struct SkipSegment: Decodable, Hashable {
-    /// intro | recap | outro | preview
+    /// intro | recap | outro | preview, or commercial (a recording's break, from comskip)
     let type: String
     let start: Double
     let end: Double

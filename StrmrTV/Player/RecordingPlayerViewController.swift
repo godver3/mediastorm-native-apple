@@ -29,6 +29,9 @@ enum RecordingPlayback {
 /// still follows the file) and stopped on close. If playback reaches an end while the server
 /// still follows the file (a source stall over 20 s ended the playlist early), a new session
 /// resumes where playback was.
+///
+/// A finished recording's commercial breaks (comskip) get Skip Commercial while they play, or
+/// are jumped over by themselves when the profile has commercial auto-skip on.
 final class RecordingPlayerViewController: EnginePlayerViewController {
     let recording: Recording
     let growing: Bool
@@ -59,6 +62,19 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
     private static let seekStep: Double = 10
     var scrubTarget: Double?
     private var scrubCommit: DispatchWorkItem?
+
+    // Commercial breaks.
+    private var commercials: [SkipSegment] = []
+    private var commercialsRequested = false
+    private var commercialAutoSkip = false
+    /// The break Skip Commercial is offered for.
+    private var activeCommercial: SkipSegment?
+    /// Menu over the button: not offered again for this break.
+    private var dismissedCommercial: SkipSegment?
+    /// Breaks jumped over by themselves: once each, so seeking back into one plays it.
+    private var autoSkippedCommercials = Set<SkipSegment>()
+    /// The break a skip is seeking past: no button for it until playback has left it.
+    private var skippingCommercial: SkipSegment?
 
     /// Shown while the server still follows the recording.
     static let recBadgeText = String(localized: "● REC")
@@ -137,6 +153,7 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
                 opening = false
                 log.info("opened at \(Int(position))s, duration \(Int(engine.duration))s")
                 engine.play()
+                loadCommercials()
             } catch is CancellationError {
             } catch {
                 guard !Task.isCancelled else { return }
@@ -179,6 +196,101 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
         Task { await APIClient.shared.stopLiveSession(id) }
     }
 
+    // MARK: Commercial breaks
+
+    /// Asks the server for the breaks once (`POST /api/video/segments` with the recording's ID).
+    /// A growing recording has none yet: the server marks them once it is done.
+    private func loadCommercials() {
+        guard !growing, !commercialsRequested else { return }
+        commercialsRequested = true
+        var body: [String: Any] = ["recordingId": recording.id]
+        if engine.duration > 0 { body["duration"] = engine.duration }
+        Task { [weak self] in
+            // A failed request is tried twice more.
+            var found: [SkipSegment] = []
+            for attempt in 0..<3 {
+                if attempt > 0 { try? await Task.sleep(for: .seconds(10)) }
+                guard self?.didFinish == false else { return }
+                if let answer = try? await APIClient.shared.skipSegments(body) {
+                    found = answer
+                    break
+                }
+            }
+            let skip = found.contains { $0.type == "commercial" } ? await PlaybackCoordinator.shared.commercialAutoSkip() : false
+            guard let self, !didFinish else { return }
+            commercials = found.filter { $0.type == "commercial" && $0.end > $0.start }.sorted { $0.start < $1.start }
+            commercialAutoSkip = skip
+            if !commercials.isEmpty {
+                log.info("\(self.commercials.count) commercial breaks, auto-skip \(skip)")
+            }
+        }
+    }
+
+    /// Inside a break: jump over it (auto-skip, once per break) or offer Skip Commercial.
+    private func updateCommercial(at time: Double) {
+        guard !commercials.isEmpty, scrubTarget == nil else { return }
+        let found = commercials.first { time >= $0.start && time < $0.end - 1 }
+        if let skipping = skippingCommercial {
+            if found == skipping { return } // the seek past it has not landed yet
+            skippingCommercial = nil
+        }
+        if let found, commercialAutoSkip, autoSkippedCommercials.insert(found).inserted {
+            log.notice("skipping commercial \(Int(found.start))-\(Int(found.end))s")
+            skipCommercial(found)
+            return
+        }
+        let segment = found == dismissedCommercial ? nil : found
+        guard segment != activeCommercial else { return }
+        activeCommercial = segment
+        setCommercialAction(segment.map { segment in
+            UIAction(title: String(localized: "Skip Commercial"), image: UIImage(systemName: "forward.fill")) { [weak self] _ in
+                self?.skipCommercial(segment)
+            }
+        })
+    }
+
+    private func skipCommercial(_ segment: SkipSegment) {
+        let end = transportDuration > 0 ? min(segment.end, transportDuration) : segment.end
+        activeCommercial = nil
+        skippingCommercial = segment
+        setCommercialAction(nil)
+        Task { await seekPlayback(to: end) }
+    }
+
+    /// The button: AVKit's contextual action, and the phone's controls or the TV's HUD where
+    /// they own the transport.
+    private func setCommercialAction(_ action: UIAction?) {
+        let hadAction = !contextualActions.isEmpty
+        contextualActions = action.map { [$0] } ?? []
+        #if os(iOS)
+        mobileControls.setAction(action)
+        #else
+        softwareHUD.setAction(action)
+        #endif
+        // Removing the button while it holds focus left AVKit with nothing focused; on the TV's
+        // HUD the new button takes focus (preferredFocusEnvironments), so Select presses it,
+        // unless the menu row or the Info card is in use.
+        #if os(tvOS)
+        let takeFocus = action != nil && ownsTransport && !softwareHUD.rowFocused && !softwareHUD.isInfoShowing
+        #else
+        let takeFocus = false
+        #endif
+        if (hadAction && action == nil) || takeFocus {
+            setNeedsFocusUpdate()
+            updateFocusIfNeeded()
+        }
+    }
+
+    /// Menu over Skip Commercial: drop it for this break (AVKit's remote handling stays stuck
+    /// while a contextual action is set).
+    private func dismissCommercialAction() -> Bool {
+        guard let activeCommercial, !contextualActions.isEmpty else { return false }
+        dismissedCommercial = activeCommercial
+        self.activeCommercial = nil
+        setCommercialAction(nil)
+        return true
+    }
+
     // MARK: Engine binding
 
     private func bindEngine() {
@@ -190,7 +302,10 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] time in
                 guard let self else { return }
-                if time > 0, !opening { lastPosition = time }
+                if time > 0, !opening {
+                    lastPosition = time
+                    updateCommercial(at: time)
+                }
                 guard ownsTransport else { return }
                 updateTransport(position: scrubTarget ?? time)
             }
@@ -266,10 +381,16 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
     }
 
     #if os(tvOS)
-    override var softwareHUDHasOpenLayer: Bool { ownsTransport && softwareHUD.isInfoShowing }
+    override var softwareHUDHasOpenLayer: Bool { ownsTransport && (softwareHUD.isInfoShowing || softwareHUD.isActionFocused) }
 
     override func closeSoftwareHUDLayer() {
+        if softwareHUD.isActionFocused, dismissCommercialAction() { return }
         softwareHUD.setInfo(visible: false)
+    }
+
+    /// The HUD's Skip Commercial takes focus, so Select presses it.
+    override var preferredFocusEnvironments: [UIFocusEnvironment] {
+        ownsTransport && softwareHUD.wantsFocus ? [softwareHUD] : super.preferredFocusEnvironments
     }
 
     override func streamInfoDidChange(_ info: StreamInfo) {
@@ -279,16 +400,21 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
     /// Without AVKit's chrome: Select / Play-Pause toggle, Left / Right seek 10 s, Down opens the
     /// Info card, Menu closes it or the player.
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        guard ownsTransport, let press = presses.first else { return super.pressesBegan(presses, with: event) }
+        guard ownsTransport, let press = presses.first else {
+            // Menu hides AVKit's Skip Commercial but leaves the action set: drop it for this break.
+            if presses.contains(where: { $0.type == .menu }) { _ = dismissCommercialAction() }
+            return super.pressesBegan(presses, with: event)
+        }
         switch press.type {
+        case .select where softwareHUD.isActionFocused: return // the focused Skip Commercial takes Select itself
         case .select, .playPause: engine.togglePlayPause()
         case .leftArrow: seek(by: -Self.seekStep)
         case .rightArrow: seek(by: Self.seekStep)
         case .downArrow: softwareHUD.setInfo(visible: !softwareHUD.isInfoShowing)
         case .upArrow: softwareHUD.setInfo(visible: false)
         case .menu:
-            // An open Info card is closed by the base class's Menu recognizer.
-            if !softwareHUD.isInfoShowing { dismiss(animated: true) }
+            // An open Info card or a focused Skip Commercial is closed by the base class's Menu recognizer.
+            if !softwareHUDHasOpenLayer { dismiss(animated: true) }
             return
         default: return super.pressesBegan(presses, with: event)
         }
