@@ -8,7 +8,8 @@ extension MobileDetailsView {
 
     @ViewBuilder
     var prequeueSection: some View {
-        let versions = model.primaryVersions
+        // The copies Play takes (none when another quality preset is picked: it streams).
+        let versions = model.playableVersions(for: model.target.isMovie ? nil : model.activeEpisode)
         if let best = versions.first {
             Label(versions.count == 1
                   ? "\(best.source.label) · \(best.quality)"

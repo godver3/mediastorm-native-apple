@@ -94,6 +94,22 @@ struct LibraryVersions: Hashable, Sendable {
         versions(season: season, episode: episode).first
     }
 
+    /// The copies Play may take under `rule` (nil when none remain).
+    func allowed(by rule: LibraryCopyRule) -> LibraryVersions? {
+        switch rule {
+        case .all: return self
+        case .stream: return nil
+        case .remoteOnly:
+            var kept = self
+            kept.movie = movie.filter { $0.source != .local }
+            kept.episodes = episodes.compactMapValues { copies in
+                let remote = copies.filter { $0.source != .local }
+                return remote.isEmpty ? nil : remote
+            }
+            return kept.isEmpty ? nil : kept
+        }
+    }
+
     private mutating func add(_ group: LibraryGroup, libraryName: String) {
         for item in group.items ?? [] where !movie.contains(where: { $0.id == item.id }) {
             movie.append(LibraryVersion(item: item, libraryName: libraryName))

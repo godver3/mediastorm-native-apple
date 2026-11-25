@@ -210,8 +210,13 @@ final class PlaybackCoordinator: ObservableObject {
         warm = WarmPrequeue(titleID: target.titleID, profile: profile, phase: .resolving)
         warmGeneration += 1
         let generation = warmGeneration
+        // "Library copy" picked: the prequeue tells the server (it plays the file, no search), even
+        // with prequeue on open off, or the server would keep the old pick.
+        let libraryPicked = QualityPresetStore.shared.picked(titleID: target.titleID, profile: profile) == QualityPresetChoices.library
         let task = Task { [api] () -> String? in
-            guard await self.playbackSettings().prequeueOnOpen,
+            // Not `||`: its right side is an autoclosure, which cannot await.
+            let start = libraryPicked ? true : await self.playbackSettings().prequeueOnOpen
+            guard start,
                   let id = try? await self.startPrequeue(warmRequest).prequeueId else {
                 self.settleWarm(target.titleID, profile, .unavailable, generation)
                 return nil
@@ -288,8 +293,9 @@ final class PlaybackCoordinator: ObservableObject {
                 // Expired or failed while the last episode played: start a fresh one.
             }
         }
+        // Stream Instead never takes the page's warm-up: it may hold the server's library copy.
         if let warmed, warmed.titleID == request.title.titleID, warmed.profile == api.profileID,
-           let pending = warmed.prequeueID {
+           !request.noLibraryCopy, let pending = warmed.prequeueID {
             self.warmed?.prequeueID = nil
             if let id = await pending.value {
                 do {
@@ -347,6 +353,7 @@ final class PlaybackCoordinator: ObservableObject {
         }
         if let start = request.startPosition { body["startOffset"] = start }
         if let preset = QualityPresetStore.shared.picked(titleID: t.titleID) { body["qualityPreset"] = preset }
+        if request.noLibraryCopy { body["noLibraryCopy"] = true }
         return body
     }
 

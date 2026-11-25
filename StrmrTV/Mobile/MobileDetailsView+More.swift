@@ -131,7 +131,9 @@ struct MobileDetailsPresentations: ViewModifier {
                 .presentationDragIndicator(.visible)
             }
             .sheet(item: $model.versionsPicker) { picker in
-                MobileVersionsSheet(heading: heading(picker.episode), versions: model.libraryVersions(for: picker.episode),
+                MobileVersionsSheet(heading: heading(picker.episode),
+                                    versions: picker.play == nil ? model.libraryVersions(for: picker.episode)
+                                                                 : model.playableVersions(for: picker.episode),
                                     onStream: picker.play == nil ? nil : {
                                         model.streamInstead(picker.episode, from: picker.play?.start)
                                     }) { version in

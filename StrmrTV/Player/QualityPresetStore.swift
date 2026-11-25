@@ -11,6 +11,8 @@ final class QualityPresetStore: ObservableObject {
 
     @Published private(set) var choices: [String: QualityPresetChoices] = [:]
     @Published private(set) var picked: [String: String] = [:]
+    /// Loads still running, so Play can wait for them (`awaitLoad`).
+    private var loading: [String: Task<QualityPresetChoices?, Never>] = [:]
 
     private func key(_ titleID: String, profile: String) -> String { profile + "|" + titleID }
 
@@ -18,13 +20,39 @@ final class QualityPresetStore: ObservableObject {
     func load(_ title: DetailsTarget) async {
         let profile = APIClient.shared.profileID
         let k = key(title.titleID, profile: profile)
-        let loaded = await APIClient.shared.qualityPresets(for: title)
+        let task = Task { await APIClient.shared.qualityPresets(for: title) }
+        loading[k] = task
+        let loaded = await task.value
         if let loaded { choices[k] = loaded } else { choices[k] = nil }
+        if loading[k] == task { loading[k] = nil }
     }
 
-    /// The choices for `title` when the server offers it presets.
+    /// Whether `title`'s presets are still loading.
+    func isLoading(_ title: DetailsTarget) -> Bool {
+        loading[key(title.titleID, profile: APIClient.shared.profileID)] != nil
+    }
+
+    /// Waits, up to `timeout`, for `title`'s presets to load (they say whether Play takes a
+    /// library copy).
+    func awaitLoad(_ title: DetailsTarget, timeout: Duration = .seconds(5)) async {
+        // Polled: awaiting the load's task would not stop at the timeout (it ignores cancellation).
+        let deadline = ContinuousClock.now + timeout
+        while isLoading(title), ContinuousClock.now < deadline, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+
+    /// The choices for `title` when the server offers it presets (nil hides the Quality action).
     func choices(for title: DetailsTarget) -> QualityPresetChoices? {
-        choices[key(title.titleID, profile: APIClient.shared.profileID)]
+        guard let c = choices[key(title.titleID, profile: APIClient.shared.profileID)],
+              !c.offered(isMovie: title.isMovie).isEmpty else { return nil }
+        return c
+    }
+
+    /// Which library copies Play takes for `title` (all of them while its presets load).
+    func libraryRule(for title: DetailsTarget) -> LibraryCopyRule {
+        LibraryCopyRule.of(choices[key(title.titleID, profile: APIClient.shared.profileID)],
+                           isMovie: title.isMovie, picked: picked(titleID: title.titleID))
     }
 
     /// The preset picked for the title this session, sent with its prequeues and searches.
@@ -36,7 +64,9 @@ final class QualityPresetStore: ObservableObject {
     func activePresetName(_ title: DetailsTarget) -> String? {
         guard let c = choices(for: title) else { return nil }
         let id = c.activeID(isMovie: title.isMovie, picked: picked(titleID: title.titleID))
-        return id == QualityPresetChoices.simple ? nil : c.activeName(isMovie: title.isMovie, picked: picked(titleID: title.titleID))
+        // "Library copy" ranks nothing either: a failed stream is not its doing.
+        return id == QualityPresetChoices.simple || id == QualityPresetChoices.library
+            ? nil : c.activeName(isMovie: title.isMovie, picked: picked(titleID: title.titleID))
     }
 
     /// Picks `id` for `title`: restarts the page's warm prequeue with it (the server then
