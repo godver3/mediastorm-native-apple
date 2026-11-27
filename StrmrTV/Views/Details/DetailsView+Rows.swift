@@ -107,7 +107,7 @@ extension DetailsView {
             if !cast.isEmpty, !isKids {
                 relatedRow(String(localized: "Cast"), .cast) {
                     ForEach(cast, id: \.id) { member in
-                        CastCard(member: member, opens: !isKids)
+                        CastCard(member: member, opens: true)
                             .focused($focus, equals: .related(.cast, String(member.id)))
                     }
                 }
@@ -116,7 +116,7 @@ extension DetailsView {
     }
 
     func posterCard(_ title: Title, in row: RelatedRow) -> some View {
-        PosterCard(title: title, width: Self.relatedCardWidth, opens: !isKids)
+        PosterCard(title: title, width: Self.relatedCardWidth)
             .focused($focus, equals: .related(row, title.id))
     }
 

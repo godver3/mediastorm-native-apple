@@ -58,17 +58,17 @@ extension MobileDetailsView {
     var relatedSections: some View {
         if let collection = model.title?.collection, !model.collectionMovies.isEmpty {
             relatedRow(String(localized: "Part of \(collection.name)")) {
-                ForEach(model.collectionMovies) { MobilePosterTile(title: $0, opens: !model.isKids) }
+                ForEach(model.collectionMovies) { MobilePosterTile(title: $0) }
             }
         }
         if !model.similar.isEmpty, !model.isKids {
             relatedRow(String(localized: "More Like This")) {
-                ForEach(model.similar.prefix(20)) { MobilePosterTile(title: $0, opens: !model.isKids) }
+                ForEach(model.similar.prefix(20)) { MobilePosterTile(title: $0) }
             }
         }
         if !model.cast.isEmpty, !model.isKids {
             relatedRow(String(localized: "Cast")) {
-                ForEach(model.cast, id: \.id) { MobileCastTile(member: $0, opens: !model.isKids) }
+                ForEach(model.cast, id: \.id) { MobileCastTile(member: $0, opens: true) }
             }
         }
     }
@@ -87,7 +87,7 @@ extension MobileDetailsView {
     }
 }
 
-/// A poster that opens the title's page (kids profiles don't navigate from related rows).
+/// A poster that opens the title's page.
 struct MobilePosterTile: View {
     let title: Title
     var opens = true
