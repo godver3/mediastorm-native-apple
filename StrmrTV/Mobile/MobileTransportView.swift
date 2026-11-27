@@ -10,6 +10,8 @@ final class MobileTransportView: UIView {
     var onPlayPause: (() -> Void)?
     var onSkip: ((Double) -> Void)?
     var onScrub: ((_ time: Double, _ ended: Bool) -> Void)?
+    /// The seek preview appeared or went away; it overlaps the menu row above the scrubber.
+    var onPreviewVisibilityChange: ((Bool) -> Void)?
 
     /// The scrubber's frame; the menu row sits above its trailing end.
     let barGuide = UILayoutGuide()
@@ -29,6 +31,8 @@ final class MobileTransportView: UIView {
     private let preview = ScrubPreviewView(imageSize: CGSize(width: 192, height: 108), compact: true)
     private var duration: Double = 0
     private(set) var isScrubbing = false
+    /// The furthest a drag may reach (a catch-up programme's aired part, as on Android); nil is the whole bar.
+    var scrubLimit: Double?
     static let skipStep: Double = 10
 
     init() {
@@ -198,6 +202,7 @@ final class MobileTransportView: UIView {
 
     @objc private func scrubMoved() {
         isScrubbing = true
+        if let scrubLimit, Double(slider.value) > scrubLimit { slider.value = Float(max(0, scrubLimit)) }
         let time = Double(slider.value)
         setClock(time)
         onScrub?(time, false)
@@ -205,6 +210,7 @@ final class MobileTransportView: UIView {
 
     @objc private func scrubEnded() {
         isScrubbing = false
+        if let scrubLimit, Double(slider.value) > scrubLimit { slider.value = Float(max(0, scrubLimit)) }
         onScrub?(Double(slider.value), true)
     }
 
@@ -214,6 +220,7 @@ final class MobileTransportView: UIView {
         setNeedsLayout()
         layoutIfNeeded()
         guard preview.alpha < 1 else { return }
+        onPreviewVisibilityChange?(true)
         UIView.animate(withDuration: 0.15) { self.preview.alpha = 1 }
     }
 
@@ -221,6 +228,7 @@ final class MobileTransportView: UIView {
 
     func hidePreview() {
         guard preview.alpha > 0 else { return }
+        onPreviewVisibilityChange?(false)
         UIView.animate(withDuration: 0.25) { self.preview.alpha = 0 }
     }
 

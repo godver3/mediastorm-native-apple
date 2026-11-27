@@ -69,6 +69,7 @@ final class MobilePlayerControls: UIView {
             self?.onScrub?(time, ended)
             self?.flash()
         }
+        transport.onPreviewVisibilityChange = { [weak self] visible in self?.setMenuRowCovered(visible) }
         menuRow.axis = .horizontal
         menuRow.spacing = 10
         for view in [chrome, transport, menuRow] as [UIView] {
@@ -327,7 +328,8 @@ final class MobilePlayerControls: UIView {
         CATransaction.commit()
     }
 
-    /// AVKit's volume slider is open over the menu row (native route): the row fades out.
+    /// AVKit's volume slider (native route) or the seek preview (software route) is over the menu row:
+    /// the row fades out.
     func setMenuRowCovered(_ covered: Bool) {
         UIView.animate(withDuration: 0.15, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
             self.menuRow.alpha = covered ? 0 : 1
