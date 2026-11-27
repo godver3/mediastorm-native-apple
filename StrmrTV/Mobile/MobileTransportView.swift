@@ -31,6 +31,7 @@ final class MobileTransportView: UIView {
     private let preview = ScrubPreviewView(imageSize: CGSize(width: 192, height: 108), compact: true)
     private var duration: Double = 0
     private(set) var isScrubbing = false
+    private var isPreviewShown = false
     /// The furthest a drag may reach (a catch-up programme's aired part, as on Android); nil is the whole bar.
     var scrubLimit: Double?
     static let skipStep: Double = 10
@@ -219,7 +220,8 @@ final class MobileTransportView: UIView {
         preview.set(time: SoftwareTransportHUD.clock(time), image: image, showsImage: hasThumbnails)
         setNeedsLayout()
         layoutIfNeeded()
-        guard preview.alpha < 1 else { return }
+        guard !isPreviewShown else { return }
+        isPreviewShown = true
         onPreviewVisibilityChange?(true)
         UIView.animate(withDuration: 0.15) { self.preview.alpha = 1 }
     }
@@ -227,7 +229,8 @@ final class MobileTransportView: UIView {
     func updatePreviewImage(_ image: UIImage) { preview.setImage(image) }
 
     func hidePreview() {
-        guard preview.alpha > 0 else { return }
+        guard isPreviewShown else { return }
+        isPreviewShown = false
         onPreviewVisibilityChange?(false)
         UIView.animate(withDuration: 0.25) { self.preview.alpha = 0 }
     }

@@ -69,7 +69,10 @@ final class MobilePlayerControls: UIView {
             self?.onScrub?(time, ended)
             self?.flash()
         }
-        transport.onPreviewVisibilityChange = { [weak self] visible in self?.setMenuRowCovered(visible) }
+        transport.onPreviewVisibilityChange = { [weak self] visible in
+            self?.previewCoversRow = visible
+            self?.applyRowCover()
+        }
         menuRow.axis = .horizontal
         menuRow.spacing = 10
         for view in [chrome, transport, menuRow] as [UIView] {
@@ -136,6 +139,7 @@ final class MobilePlayerControls: UIView {
     func setOwnsTransport(_ owns: Bool) {
         guard owns != ownsTransport else { return }
         ownsTransport = owns
+        transport.hidePreview()
         transport.isHidden = !owns
         NSLayoutConstraint.deactivate(owns ? rowOverlayConstraints : rowTransportConstraints)
         NSLayoutConstraint.activate(owns ? rowTransportConstraints : rowOverlayConstraints)
@@ -331,6 +335,15 @@ final class MobilePlayerControls: UIView {
     /// AVKit's volume slider (native route) or the seek preview (software route) is over the menu row:
     /// the row fades out.
     func setMenuRowCovered(_ covered: Bool) {
+        volumeCoversRow = covered
+        applyRowCover()
+    }
+
+    private var volumeCoversRow = false
+    private var previewCoversRow = false
+
+    private func applyRowCover() {
+        let covered = volumeCoversRow || (previewCoversRow && ownsTransport)
         UIView.animate(withDuration: 0.15, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
             self.menuRow.alpha = covered ? 0 : 1
         }
