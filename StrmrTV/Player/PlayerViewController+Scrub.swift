@@ -1,8 +1,8 @@
 import UIKit
 
-/// The software route has no AVKit transport bar: the remote is handled here, as AVKit's bar
-/// handles it, and seek previews come from the backend's thumbnail API, drawn by the HUD while
-/// seeking.
+/// The app's transport (every route on tvOS, the software route on iOS): the remote is handled
+/// here, as AVKit's bar handles it, and seek previews come from the backend's thumbnail API,
+/// drawn by the HUD while seeking.
 extension PlayerViewController {
     // MARK: Software-route remote handling
 
@@ -21,27 +21,12 @@ extension PlayerViewController {
             guard !hud.rowFocused else { return true }
             if hud.isInfoShowing { hud.setInfo(visible: false) }
             scrub(by: press.type == .leftArrow ? -Self.scrubStep : Self.scrubStep)
-        case .upArrow:
-            if hud.isInfoShowing {
-                hud.setInfo(visible: false)
-            } else if hud.isShowing, !hud.rowFocused {
-                hud.focusRow()
-            } else {
-                hud.flash()
-            }
-            return true
-        case .downArrow:
-            if hud.rowFocused {
-                hud.releaseRow()
-                hud.flash()
-            } else {
-                hud.setInfo(visible: !hud.isInfoShowing)
-            }
-            return true
+        case .upArrow, .downArrow:
+            return handleTransportNavigation(press.type)
         case .menu:
             // UIKit's own Menu handling closes the player once nothing is open; until then the
             // base class's Menu recognizer takes the press (`closeSoftwareHUDLayer`).
-            if !softwareHUDHasOpenLayer { log.notice("menu pressed on the software route; closing") }
+            if !softwareHUDHasOpenLayer { log.notice("menu pressed with the transport closed; closing") }
             return true
         default:
             return false
@@ -53,20 +38,14 @@ extension PlayerViewController {
     /// Whether Menu would close part of the HUD (as AVKit: what is open, then the bar) rather
     /// than the player.
     override var softwareHUDHasOpenLayer: Bool {
-        let hud = softwareHUD
-        return softwareSurfaceMounted && subtitleSearch == nil && presentedViewController == nil
-            && (hud.isActionFocused || hud.rowFocused || hud.isInfoShowing || hud.isShowing)
+        subtitleSearch == nil && presentedViewController == nil && super.softwareHUDHasOpenLayer
     }
 
     override func closeSoftwareHUDLayer() {
-        let hud = softwareHUD
-        if hud.isActionFocused {
+        if softwareHUD.isActionFocused {
             dismissSkipActionIfMenu()
-        } else if hud.rowFocused || hud.isInfoShowing {
-            hud.releaseRow()
-            hud.setInfo(visible: false)
         } else {
-            hud.hide()
+            super.closeSoftwareHUDLayer()
         }
     }
 

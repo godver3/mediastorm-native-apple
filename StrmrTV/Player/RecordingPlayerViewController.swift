@@ -88,13 +88,15 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
         if growing {
             Self.fill(recBadge, in: overlayHost)
             overlayHost.addSubview(recBadge)
-            showsPlaybackControls = false
-            Self.fill(softwareHUD, in: view)
-            view.addSubview(softwareHUD)
-            softwareHUD.flash()
         }
+        installTransportHUD(softwareHUD)
+        softwareHUD.flash()
         #endif
     }
+
+    #if os(tvOS)
+    override var transportHUD: SoftwareTransportHUD? { softwareHUD }
+    #endif
 
     #if !os(iOS)
     /// The transport bar's (and the growing recording's HUD's) one menu: Audio Offset.
@@ -240,9 +242,9 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
         dismiss(animated: true)
     }
 
-    /// The app's readout and remote handling replace AVKit's: on the software route (no AVPlayer)
-    /// and for a growing recording (AVKit would show it as live).
-    var ownsTransport: Bool { growing || softwareSurfaceMounted }
+    /// The app's readout and remote handling replace AVKit's: always on tvOS, and on iOS on the
+    /// software route (no AVPlayer) and for a growing recording (AVKit would show it as live).
+    override var ownsTransport: Bool { growing || super.ownsTransport }
 
     /// The length to scrub over: for a growing recording, as far as the playlist reaches so far.
     var transportDuration: Double {
@@ -255,14 +257,6 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
         if growing { showsPlaybackControls = false }
         #if os(iOS)
         mobileSoftwareSurfaceChanged()
-        #else
-        if mounted, softwareHUD.superview == nil {
-            Self.fill(softwareHUD, in: view)
-            view.addSubview(softwareHUD)
-            softwareHUD.flash()
-        } else if !mounted, !growing {
-            softwareHUD.removeFromSuperview()
-        }
         #endif
     }
 
@@ -276,39 +270,38 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
     }
 
     #if os(tvOS)
-    override var softwareHUDHasOpenLayer: Bool { ownsTransport && (softwareHUD.isInfoShowing || softwareHUD.isActionFocused) }
-
     override func closeSoftwareHUDLayer() {
         if softwareHUD.isActionFocused, dismissCommercialAction() { return }
-        softwareHUD.setInfo(visible: false)
-    }
-
-    /// The HUD's Skip Commercial takes focus, so Select presses it.
-    override var preferredFocusEnvironments: [UIFocusEnvironment] {
-        ownsTransport && softwareHUD.wantsFocus ? [softwareHUD] : super.preferredFocusEnvironments
+        super.closeSoftwareHUDLayer()
     }
 
     override func streamInfoDidChange(_ info: StreamInfo) {
         softwareHUD.setDetails(info.summary)
     }
 
-    /// Without AVKit's chrome: Select / Play-Pause toggle, Left / Right seek 10 s, Down opens the
-    /// Info card, Menu closes it or the player.
+    /// Select / Play-Pause toggle, Left / Right seek 10 s, Up / Down the row and the Info card
+    /// (`handleTransportNavigation`), Menu closes what is open, then the player.
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         guard ownsTransport, let press = presses.first else {
             // Menu hides AVKit's Skip Commercial but leaves the action set: drop it for this break.
             if presses.contains(where: { $0.type == .menu }) { _ = dismissCommercialAction() }
             return super.pressesBegan(presses, with: event)
         }
+        guard presentedViewController == nil else { return }
+        let hud = softwareHUD
         switch press.type {
-        case .select where softwareHUD.isActionFocused: return // the focused Skip Commercial takes Select itself
+        // A focused Skip Commercial or row button takes Select itself.
+        case .select where hud.isActionFocused || hud.rowFocused: return
         case .select, .playPause: engine.togglePlayPause()
-        case .leftArrow: seek(by: -Self.seekStep)
-        case .rightArrow: seek(by: Self.seekStep)
-        case .downArrow: softwareHUD.setInfo(visible: !softwareHUD.isInfoShowing)
-        case .upArrow: softwareHUD.setInfo(visible: false)
+        case .leftArrow, .rightArrow:
+            guard !hud.rowFocused else { return }
+            if hud.isInfoShowing { hud.setInfo(visible: false) }
+            seek(by: press.type == .leftArrow ? -Self.seekStep : Self.seekStep)
+        case .upArrow, .downArrow:
+            _ = handleTransportNavigation(press.type)
+            return
         case .menu:
-            // An open Info card or a focused Skip Commercial is closed by the base class's Menu recognizer.
+            // An open layer (Skip Commercial, the row, the Info card, the bar) is closed by the base class's Menu recognizer.
             if !softwareHUDHasOpenLayer { dismiss(animated: true) }
             return
         default: return super.pressesBegan(presses, with: event)

@@ -15,7 +15,7 @@ extension PlayerViewController {
 
     func presentSourcePicker() {
         guard presentedViewController == nil, !engine.isLive, !didFinish else { return }
-        if softwareSurfaceMounted { softwareHUD.flash() }
+        if ownsTransport { softwareHUD.flash() }
         log.notice("switch source: list opened (route \(self.engine.videoRoute.rawValue))")
         if sourceList?.results.isEmpty ?? true { subtitleStatus.show(String(localized: "Finding sources…"), hideAfter: nil) }
         Task { [weak self] in

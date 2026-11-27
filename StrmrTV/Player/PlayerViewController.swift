@@ -151,8 +151,13 @@ final class PlayerViewController: EnginePlayerViewController {
         installStreamInfo(file: currentSource.releaseName, source: currentSource.origin)
         #if os(iOS)
         installMobileControls()
+        #else
+        installTransportHUD(softwareHUD)
+        softwareHUD.flash()
         #endif
     }
+
+    override var transportHUD: SoftwareTransportHUD? { softwareHUD }
 
     #if os(iOS)
     override func viewDidLayoutSubviews() {
@@ -197,6 +202,9 @@ final class PlayerViewController: EnginePlayerViewController {
                     engine.setRate(request.speed)
                 }
                 engine.play()
+                #if os(tvOS)
+                startThumbnails()
+                #endif
                 startProgressTimer()
                 startWatchTogether()
                 await applySubtitlePick()
@@ -213,11 +221,13 @@ final class PlayerViewController: EnginePlayerViewController {
 
     func makeLoadOptions() -> LoadOptions {
         var options = baseLoadOptions()
-        // Scrub thumbnails on the hardware route: an I-frame rendition in the engine's master
-        // is the one input AVPlayerViewController takes previews from (the backend's JPEGs
-        // have no public way in). The engine leaves it out where it can't serve every
-        // keyframe (MPEG-TS, single-connection origins, …) and logs why.
+        #if os(iOS)
+        // Scrub thumbnails in AVKit's bar (the phone's hardware route): an I-frame rendition in
+        // the engine's master is the one input AVPlayerViewController takes previews from. The
+        // engine leaves it out where it can't serve every keyframe and logs why. tvOS draws its
+        // own bar, with the backend's thumbnails (`+Scrub`).
         options.serveIFramePlaylist = previewsEnabled
+        #endif
         // TrueHD Atmos / DTS:X heights (Settings › Playback); the engine renders them on VOD only.
         options.objectAudioRendering = AtmosSettingsStore.shared.rendering
         #if os(iOS)
@@ -228,28 +238,11 @@ final class PlayerViewController: EnginePlayerViewController {
         return options
     }
 
-    /// The software route's HUD takes focus for its menu row and Skip capsule.
-    override var preferredFocusEnvironments: [UIFocusEnvironment] {
-        softwareSurfaceMounted && softwareHUD.wantsFocus ? [softwareHUD] : super.preferredFocusEnvironments
-    }
-
-    /// A menu closed from the HUD's row hands focus to AVKit's container rather than back to the
-    /// button it opened from; while the HUD wants focus, take it back, as AVKit's own bar does.
-    override func didUpdateFocus(in context: UIFocusUpdateContext, with coordinator: UIFocusAnimationCoordinator) {
-        super.didUpdateFocus(in: context, with: coordinator)
-        guard softwareSurfaceMounted, softwareHUD.wantsFocus, let next = context.nextFocusedView,
-              next.isDescendant(of: view), !next.isDescendant(of: softwareHUD) else { return }
-        DispatchQueue.main.async { [weak self] in
-            self?.setNeedsFocusUpdate()
-            self?.updateFocusIfNeeded()
-        }
-    }
-
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         // Presses a page over the player (the subtitle search, Switch Source) leaves unhandled come
         // back up the responder chain; they are not the player's (Menu would close it, arrows seek).
         guard subtitleSearch == nil, presentedViewController == nil else { return }
-        guard softwareSurfaceMounted, let press = presses.first else {
+        guard ownsTransport, let press = presses.first else {
             dismissSkipActionIfMenu(presses)
             return super.pressesBegan(presses, with: event)
         }

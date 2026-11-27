@@ -27,16 +27,16 @@ final class LiveProgrammeScrub {
 /// lands is `LiveCatchupRules.decide`: in place inside the timeshift window or the archive
 /// playing, else the archive there, or live.
 ///
-/// On tvOS a channel without catch-up gets the same bar while it plays on the software route
-/// (an OTA tuner's MPEG-2, which VideoToolbox can't decode): there is no AVKit bar there, so
-/// without it Add Screen, the audio offset and the Info card had no way in. Left / Right then
-/// stay with the timeshift keys, and the row has no Start Over.
+/// On tvOS every channel gets this bar, on both routes, so live looks like every other player
+/// (`EnginePlayerViewController+Transport`). Without catch-up, Left / Right stay with the
+/// timeshift keys (`handleTimeshiftPress`), the bar spans the guide's programme when there is one,
+/// and the row has no Start Over.
 extension LivePlayerViewController {
     var usesProgrammeBar: Bool { hasCatchupBar || usesSoftwareLiveBar }
     private var hasCatchupBar: Bool { channel.catchupWindow != nil }
     private var usesSoftwareLiveBar: Bool {
         #if os(tvOS)
-        !hasCatchupBar && softwareSurfaceMounted
+        !hasCatchupBar
         #else
         false
         #endif
@@ -51,12 +51,7 @@ extension LivePlayerViewController {
         // The TV's HUD answers only the remote; touch gets the phone's controls (`+ProgrammeBarMobile`).
         installMobileProgrammeBar()
         #else
-        hud.onFocusChange = { [weak self] in
-            self?.setNeedsFocusUpdate()
-            self?.updateFocusIfNeeded()
-        }
-        Self.fill(hud, in: view)
-        view.insertSubview(hud, belowSubview: cover)
+        installTransportHUD(hud, below: cover)
         #endif
         scrub.ticker = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshProgrammeBar() }
@@ -65,9 +60,10 @@ extension LivePlayerViewController {
         refreshProgrammeBar()
     }
 
-    /// The software route's bar comes off when the tune moves back to AVPlayer, whose bar returns.
+    /// iOS: the software route's bar comes off when the tune moves back to AVPlayer, whose bar
+    /// returns. tvOS keeps it.
     func removeSoftwareLiveBar() {
-        guard !hasCatchupBar, scrub.ticker != nil else { return }
+        guard !usesProgrammeBar, scrub.ticker != nil else { return }
         stopProgrammeBar()
         scrub.ticker = nil
         cancelScrub()
@@ -153,23 +149,8 @@ extension LivePlayerViewController {
             guard hasCatchupBar else { return false }
             if hud.isInfoShowing { hud.setInfo(visible: false) }
             step(forward: press == .rightArrow)
-        case .upArrow:
-            if hud.isInfoShowing {
-                hud.setInfo(visible: false)
-            } else if hud.isShowing, !hud.rowFocused {
-                hud.focusRow()
-            } else {
-                hud.flash()
-            }
-            return true
-        case .downArrow:
-            if hud.rowFocused {
-                hud.releaseRow()
-                hud.flash()
-            } else {
-                hud.setInfo(visible: !hud.isInfoShowing)
-            }
-            return true
+        case .upArrow, .downArrow:
+            return handleTransportNavigation(press)
         case .menu:
             return softwareHUDHasOpenLayer
         default:
@@ -196,22 +177,6 @@ extension LivePlayerViewController {
             hud.hide()
         }
         refreshProgrammeBar()
-    }
-
-    /// The HUD takes focus for its row, as on the software route.
-    override var preferredFocusEnvironments: [UIFocusEnvironment] {
-        usesProgrammeBar && hud.wantsFocus ? [hud] : super.preferredFocusEnvironments
-    }
-
-    /// A menu closed from the row hands focus back to the player's container; take it back.
-    override func didUpdateFocus(in context: UIFocusUpdateContext, with coordinator: UIFocusAnimationCoordinator) {
-        super.didUpdateFocus(in: context, with: coordinator)
-        guard usesProgrammeBar, hud.wantsFocus, let next = context.nextFocusedView,
-              next.isDescendant(of: view), !next.isDescendant(of: hud) else { return }
-        DispatchQueue.main.async { [weak self] in
-            self?.setNeedsFocusUpdate()
-            self?.updateFocusIfNeeded()
-        }
     }
 
     // MARK: Picking a point

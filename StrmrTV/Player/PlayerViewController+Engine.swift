@@ -17,7 +17,7 @@ extension PlayerViewController {
                 updateSkipAction(at: time)
                 sampleCreditsIfDue(at: time)
                 prefetchNextIfNear(time)
-                guard softwareSurfaceMounted else { return }
+                guard ownsTransport else { return }
                 #if os(iOS)
                 updateMobileTransport(position: time)
                 #else
@@ -103,20 +103,12 @@ extension PlayerViewController {
         }
         mobileSoftwareSurfaceChanged(mounted: mounted)
         #else
+        // The HUD is the transport on both routes (`viewDidLoad`); only the subtitle overlay moves.
         if mounted {
-            softwareHUD.onFocusChange = { [weak self] in
-                self?.setNeedsFocusUpdate()
-                self?.updateFocusIfNeeded()
-            }
-            Self.fill(softwareHUD, in: view)
             Self.fill(subtitleOverlay, in: overlayHost)
             overlayHost.insertSubview(subtitleOverlay, aboveSubview: softwareSurface)
-            view.addSubview(softwareHUD)
-            softwareHUD.flash()
-            startThumbnails()
         } else {
             subtitleOverlay.removeFromSuperview()
-            softwareHUD.removeFromSuperview()
             if !didFinish { mountSubtitleOverlay() }
         }
         #endif

@@ -32,7 +32,7 @@ extension LivePlayerViewController {
 
     /// The software route's timeshift keys; true when the press was taken.
     func handleTimeshiftPress(_ presses: Set<UIPress>) -> Bool {
-        guard timeshifting, softwareSurfaceMounted, let press = presses.first?.type else { return false }
+        guard timeshifting, ownsTransport, let press = presses.first?.type else { return false }
         switch press {
         case .playPause:
             engine.togglePlayPause()

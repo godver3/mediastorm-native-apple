@@ -3,8 +3,10 @@ import AVKit
 import Combine
 import UIKit
 
-/// What the VOD and live players share: stock tvOS player chrome over AetherEngine, the
-/// software (dav1d / VP9) route's own surface, and the overlay every subtitle is drawn in.
+/// What every player shares: AVPlayerViewController over AetherEngine, the software (dav1d / VP9)
+/// route's own surface, the overlay every subtitle is drawn in, and on tvOS the app's own
+/// transport (`SoftwareTransportHUD`, `+Transport`) in place of AVKit's bar on both routes, so
+/// VOD, live, catch-up and recordings share one layout and differ only in their buttons.
 /// The engine owns demux/decode; AVKit only sees the engine's AVPlayer.
 class EnginePlayerViewController: AVPlayerViewController {
     let engine: AetherEngine
@@ -58,7 +60,7 @@ class EnginePlayerViewController: AVPlayerViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        showsPlaybackControls = true
+        showsPlaybackControls = !ownsTransport
         // The engine is the sole display-criteria writer (HDR / DV / frame-rate match);
         // AVKit's automatic criteria would race it.
         appliesPreferredDisplayCriteriaAutomatically = false
@@ -117,12 +119,56 @@ class EnginePlayerViewController: AVPlayerViewController {
     /// The Stream tab's rows changed (`+StreamInfo`); the software route's HUD shows the summary.
     func streamInfoDidChange(_ info: StreamInfo) {}
 
-    /// Whether the app's own HUD (the software route's) has something Menu should close (the
-    /// bar, a menu row, the Info card) before the player. Subclasses with a HUD override both.
-    @objc dynamic var softwareHUDHasOpenLayer: Bool { false }
+    /// The app's own transport replaces AVKit's bar: always on tvOS (one layout for every kind of
+    /// playback, on both routes), on iOS only on the software route, where AVKit has no AVPlayer.
+    var ownsTransport: Bool {
+        #if os(tvOS)
+        true
+        #else
+        softwareSurfaceMounted
+        #endif
+    }
+
+    /// The player's HUD while it owns the transport (tvOS); nil for none.
+    var transportHUD: SoftwareTransportHUD? { nil }
+
+    /// Whether the app's HUD has something Menu should close (the Skip capsule, the row, the
+    /// Info card, then the bar) before the player, as AVKit's bar does.
+    @objc dynamic var softwareHUDHasOpenLayer: Bool {
+        guard ownsTransport, let hud = transportHUD, hud.superview != nil else { return false }
+        return hud.isActionFocused || hud.rowFocused || hud.isInfoShowing || hud.isShowing
+    }
 
     /// Closes the HUD's topmost open layer; called for a Menu press while there is one.
-    @objc dynamic func closeSoftwareHUDLayer() {}
+    @objc dynamic func closeSoftwareHUDLayer() {
+        guard let hud = transportHUD else { return }
+        if hud.rowFocused || hud.isInfoShowing {
+            hud.releaseRow()
+            hud.setInfo(visible: false)
+        } else {
+            hud.hide()
+        }
+    }
+
+    #if os(tvOS)
+    /// The HUD takes focus for its row and Skip capsule.
+    override var preferredFocusEnvironments: [UIFocusEnvironment] {
+        if ownsTransport, let hud = transportHUD, hud.superview != nil, hud.wantsFocus { return [hud] }
+        return super.preferredFocusEnvironments
+    }
+
+    /// A menu closed from the HUD's row hands focus to AVKit's container rather than back to the
+    /// button it opened from; while the HUD wants focus, take it back, as AVKit's own bar does.
+    override func didUpdateFocus(in context: UIFocusUpdateContext, with coordinator: UIFocusAnimationCoordinator) {
+        super.didUpdateFocus(in: context, with: coordinator)
+        guard ownsTransport, let hud = transportHUD, hud.wantsFocus, let next = context.nextFocusedView,
+              next.isDescendant(of: view), !next.isDescendant(of: hud) else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.setNeedsFocusUpdate()
+            self?.updateFocusIfNeeded()
+        }
+    }
+    #endif
 
     /// UIKit closes a presented player on Menu with its own gesture, which no press handler can
     /// veto; this recognizer takes the press instead while the HUD has something open.
@@ -159,7 +205,7 @@ class EnginePlayerViewController: AVPlayerViewController {
         }
         softwareSurfaceMounted = mounted
         if mounted { clockLabel.alpha = 0 }
-        showsPlaybackControls = !mounted
+        showsPlaybackControls = !ownsTransport
         #if os(iOS)
         updateTouchClose(softwareMounted: mounted)
         #endif

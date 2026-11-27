@@ -96,6 +96,9 @@ final class LivePlayerViewController: EnginePlayerViewController {
     override var hasTouchTransport: Bool { usesProgrammeBar }
     #endif
 
+    /// The programme bar is the transport (`+ProgrammeBar`); its focus goes through the base class.
+    override var transportHUD: SoftwareTransportHUD? { usesProgrammeBar ? scrub.hud : nil }
+
     /// The menu entry for the server's captions; clear of every engine id.
     static let serverCaptionsID = -608
 
@@ -345,14 +348,15 @@ final class LivePlayerViewController: EnginePlayerViewController {
     }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        // Without AVKit's chrome (software route) Menu has to close the player itself.
-        if softwareSurfaceMounted, presses.contains(where: { $0.type == .menu }) {
-            dismiss(animated: true)
+        // Without AVKit's chrome Menu has to close the player itself, once the HUD has nothing
+        // open (an open layer is closed by the base class's Menu recognizer).
+        if ownsTransport, presses.contains(where: { $0.type == .menu }) {
+            if !softwareHUDHasOpenLayer { dismiss(animated: true) }
             return
         }
         if handleProgrammeBarPress(presses) { return }
         // Nor is there a transport bar for the Subtitles menu: Select opens it instead.
-        if softwareSurfaceMounted, presses.contains(where: { $0.type == .select }), !subtitleChoices.isEmpty {
+        if ownsTransport, presses.contains(where: { $0.type == .select }), !subtitleChoices.isEmpty {
             presentSubtitlePicker()
             return
         }

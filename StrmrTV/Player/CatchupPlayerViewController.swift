@@ -16,8 +16,9 @@ enum CatchupPlayback {
     }
 }
 
-/// A programme replayed from the provider's archive (catch-up), in the stock tvOS player over
-/// AetherEngine, from its start, with no resume or watch state (as recordings play).
+/// A programme replayed from the provider's archive (catch-up) over AetherEngine, from its start,
+/// with no resume or watch state (as recordings play). On tvOS it shows the same transport as
+/// every other player (`SoftwareTransportHUD`); its row has Audio Offset.
 ///
 /// The server turns the programme into the provider's archive URL (`GET /api/live/catchup`), which
 /// plays as a file through `/api/video/stream`: providers serve the archive whole, with a length
@@ -50,7 +51,12 @@ final class CatchupPlayerViewController: EnginePlayerViewController {
         setInfoPanel(title: program.title, subtitle: channel.name, description: program.description)
         installStreamInfo(file: nil, source: StreamSource.joined([String(localized: "Catch-up"), channel.name]))
         installAudioOffsetMenu()
+        #if os(tvOS)
+        installTransportHUD(softwareHUD, below: cover)
+        #endif
     }
+
+    override var transportHUD: SoftwareTransportHUD? { softwareHUD }
 
     /// The transport bar's (and the software route's HUD's) one menu: Audio Offset.
     private func installAudioOffsetMenu() {
@@ -78,6 +84,7 @@ final class CatchupPlayerViewController: EnginePlayerViewController {
                 let url = api.catchupStreamURL(archive, channel: channel, program: program)
                 _ = try await engine.load(url: url, startPosition: 0, options: baseLoadOptions())
                 cover.isHidden = true
+                if ownsTransport { softwareHUD.flash() }
                 log.info("opened, duration \(Int(engine.duration))s")
                 engine.play()
             } catch is CancellationError {
@@ -100,7 +107,7 @@ final class CatchupPlayerViewController: EnginePlayerViewController {
             .sink { [weak self] time in
                 guard let self else { return }
                 if time > 0 { lastPosition = time }
-                guard softwareSurfaceMounted else { return }
+                guard ownsTransport else { return }
                 softwareHUD.update(position: scrubTarget ?? time, duration: engine.duration,
                                    paused: engine.state == .paused)
             }
@@ -119,10 +126,13 @@ final class CatchupPlayerViewController: EnginePlayerViewController {
             .store(in: &cancellables)
     }
 
-    // MARK: Software route (no AVPlayer, so no AVKit chrome)
+    // MARK: Transport
 
+    /// tvOS keeps its HUD on both routes; iOS shows it only on the software route (no AVPlayer,
+    /// so no AVKit chrome).
     private func setSoftwareSurface(mounted: Bool) {
         guard mountSoftwareSurface(mounted) else { return }
+        #if os(iOS)
         if mounted, softwareHUD.superview == nil {
             Self.fill(softwareHUD, in: view)
             view.addSubview(softwareHUD)
@@ -130,34 +140,38 @@ final class CatchupPlayerViewController: EnginePlayerViewController {
         } else if !mounted {
             softwareHUD.removeFromSuperview()
         }
-    }
-
-    override var softwareHUDHasOpenLayer: Bool { softwareSurfaceMounted && softwareHUD.isInfoShowing }
-
-    override func closeSoftwareHUDLayer() {
-        softwareHUD.setInfo(visible: false)
+        #endif
     }
 
     override func streamInfoDidChange(_ info: StreamInfo) {
         softwareHUD.setDetails(info.summary)
     }
 
-    /// On the software route: Select / Play-Pause toggle, Left / Right seek 10 s, Down opens the
-    /// Info card, Menu closes it or the player. Otherwise AVKit's own transport.
+    /// Select / Play-Pause toggle, Left / Right seek 10 s, Up / Down the row and the Info card
+    /// (`handleTransportNavigation`), Menu closes what is open, then the player.
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        guard softwareSurfaceMounted, let press = presses.first else { return super.pressesBegan(presses, with: event) }
+        guard presentedViewController == nil else { return }
+        guard ownsTransport, let press = presses.first else { return super.pressesBegan(presses, with: event) }
+        let hud = softwareHUD
         switch press.type {
-        case .select, .playPause: engine.togglePlayPause()
-        case .leftArrow: seek(by: -Self.seekStep)
-        case .rightArrow: seek(by: Self.seekStep)
-        case .downArrow: softwareHUD.setInfo(visible: !softwareHUD.isInfoShowing)
-        case .upArrow: softwareHUD.setInfo(visible: false)
+        case .playPause: engine.togglePlayPause()
+        case .select:
+            guard !hud.rowFocused else { return } // a focused row button takes Select itself
+            engine.togglePlayPause()
+        case .leftArrow, .rightArrow:
+            guard !hud.rowFocused else { return }
+            if hud.isInfoShowing { hud.setInfo(visible: false) }
+            seek(by: press.type == .leftArrow ? -Self.seekStep : Self.seekStep)
+        case .upArrow, .downArrow:
+            _ = handleTransportNavigation(press.type)
+            return
         case .menu:
-            if !softwareHUD.isInfoShowing { dismiss(animated: true) }
+            // An open layer is closed by the base class's Menu recognizer.
+            if !softwareHUDHasOpenLayer { dismiss(animated: true) }
             return
         default: return super.pressesBegan(presses, with: event)
         }
-        softwareHUD.flash()
+        hud.flash()
     }
 
     /// A run of presses is one seek, sent once the presses pause.

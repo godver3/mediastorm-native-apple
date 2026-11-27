@@ -36,7 +36,7 @@ extension PlayerViewController {
         onlineSubtitles.onStatus = { [weak self] text, hideAfter in
             guard let self, !didFinish else { return }
             subtitleStatus.show(text, hideAfter: hideAfter)
-            if softwareSurfaceMounted { softwareHUD.flash() }
+            if ownsTransport { softwareHUD.flash() }
         }
         onlineSubtitles.onSettings = { [weak self] in self?.rebuildTrackMenus() }
         Task { [weak self] in _ = await self?.onlineSubtitles.loadSettings() }
