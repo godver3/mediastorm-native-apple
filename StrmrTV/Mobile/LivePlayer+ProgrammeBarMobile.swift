@@ -40,10 +40,13 @@ extension LivePlayerViewController {
             ? "-" + SoftwareTransportHUD.clock(behind) : String(localized: "LIVE"))
         guard let program = LiveCatchupRules.program(at: playhead, in: catchupPrograms) else {
             transport.setTitle(channel.name, subtitle: nil)
+            transport.scrubLimit = 0
             mobileControls.update(position: 0, duration: 0, paused: paused)
             return
         }
         transport.setTitle(program.title, subtitle: channel.name)
+        // Nothing past now has aired: the drag stops at live (tvOS and Android clamp the same way).
+        transport.scrubLimit = max(0, Date().timeIntervalSince(program.start))
         mobileControls.update(position: playhead.timeIntervalSince(program.start),
                               duration: max(1, program.stop.timeIntervalSince(program.start)), paused: paused)
     }
