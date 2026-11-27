@@ -171,8 +171,10 @@ final class MobileTransportView: UIView {
 
     func setDetails(_ text: String?) { detailsLabel.text = text }
 
-    func setBadge(_ text: String?) {
+    /// `highlighted` is the red pill (LIVE, REC); otherwise a quiet grey one (how far behind live).
+    func setBadge(_ text: String?, highlighted: Bool = true) {
         badge.text = text
+        badge.backgroundColor = highlighted ? UIColor.systemRed.withAlphaComponent(0.9) : UIColor.white.withAlphaComponent(0.2)
         badge.isHidden = text == nil
     }
 

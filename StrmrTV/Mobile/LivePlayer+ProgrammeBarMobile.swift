@@ -36,8 +36,9 @@ extension LivePlayerViewController {
         let paused = if case .paused = engine.state { true } else { false }
         let playhead = catchupPlayhead
         let behind = max(0, Date().timeIntervalSince(playhead))
-        transport.setBadge(behind > LiveTimeshiftStatusView.atLiveSeconds
-            ? "-" + SoftwareTransportHUD.clock(behind) : String(localized: "LIVE"))
+        let atLive = behind <= LiveTimeshiftStatusView.atLiveSeconds
+        transport.setBadge(atLive ? String(localized: "LIVE") : String(localized: "\(SoftwareTransportHUD.clock(behind)) behind"),
+                           highlighted: atLive)
         guard let program = LiveCatchupRules.program(at: playhead, in: catchupPrograms) else {
             transport.setTitle(channel.name, subtitle: nil)
             transport.scrubLimit = 0
