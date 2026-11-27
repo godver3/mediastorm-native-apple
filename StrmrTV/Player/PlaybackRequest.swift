@@ -64,6 +64,8 @@ struct PlaybackRequest {
     var library: LibraryVersions?
     /// The copy this playback uses (picked in the Versions list, or set as it starts).
     var libraryVersion: LibraryVersion?
+    /// Stream Instead: the server must not answer with a library copy of its own either.
+    var noLibraryCopy = false
     /// Sources Auto Switch has already moved off (or failed to start) for this title, by guid
     /// and release name; carried onto each switch so it never goes back to one.
     var autoSwitchTried: Set<String> = []
@@ -151,15 +153,19 @@ struct PlaybackRequest {
         var art = artwork
         art.backdropURLs.removeAll { $0 == episode?.imageURL }
         if let still = next.imageURL, !still.isEmpty { art.backdropURLs.insert(still, at: 0) }
-        return PlaybackRequest(title: title, episode: next, start: nil, following: Array(following.dropFirst()),
-                               artwork: art, library: library)
+        var request = PlaybackRequest(title: title, episode: next, start: nil, following: Array(following.dropFirst()),
+                                      artwork: art, library: library)
+        // Stream Instead holds for the episodes that follow.
+        request.noLibraryCopy = noLibraryCopy
+        return request
     }
 
     /// Identifies what a prequeue resolves: the title, the episode (in its ordering) and the
     /// start point.
     var prequeueKey: String {
+        // Stream Instead resolves something else than a prefetch that may hold the library copy.
         [title.titleID, episode?.code ?? "", episode?.numbering?.ordering ?? "",
-         startPosition.map { String(Int($0)) } ?? ""].joined(separator: "|")
+         startPosition.map { String(Int($0)) } ?? "", noLibraryCopy ? "stream" : ""].joined(separator: "|")
     }
 
     var displayTitle: String {

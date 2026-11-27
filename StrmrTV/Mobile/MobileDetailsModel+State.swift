@@ -65,7 +65,7 @@ extension MobileDetailsModel {
     /// The page's prequeue, while it resolves or once it lists tracks for the episode Play
     /// targets; nil hides the Audio & Subtitles line.
     var warmPrequeue: WarmPrequeue? {
-        guard primaryVersions.isEmpty else { return nil }  // Play uses a library copy
+        guard playableVersions(for: target.isMovie ? nil : activeEpisode).isEmpty else { return nil }  // Play uses a library copy
         guard let warm = PlaybackCoordinator.shared.warm, warm.titleID == target.titleID,
               warm.profile == APIClient.shared.profileID else { return nil }
         switch warm.phase {

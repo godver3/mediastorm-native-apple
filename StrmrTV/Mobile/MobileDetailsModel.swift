@@ -242,23 +242,43 @@ final class MobileDetailsModel: ObservableObject {
         libraryVersions(for: target.isMovie ? nil : activeEpisode)
     }
 
+    /// The copies Play may take: none once another quality preset is picked for the title (the
+    /// server decides the same for every other client). Versions still lists them all.
+    var playableLibrary: LibraryVersions? {
+        libraryVersions?.allowed(by: QualityPresetStore.shared.libraryRule(for: target))
+    }
+
+    /// `libraryVersions(for:)` of the copies Play may take.
+    func playableVersions(for episode: Episode?) -> [LibraryVersion] {
+        guard let playableLibrary else { return [] }
+        guard let episode else { return target.isMovie ? playableLibrary.movie : [] }
+        return playableLibrary.versions(season: episode.seasonNumber, episode: episode.episodeNumber)
+    }
+
     // MARK: Requests
 
     func request(_ episode: Episode?, from start: StartPoint?) -> PlaybackRequest {
         DetailsRequest.make(target: target, title: title, seasons: seasons, episode: episode,
-                            start: start, seed: artSeed, library: libraryVersions)
+                            start: start, seed: artSeed, library: playableLibrary)
     }
 
     /// Play, through the library when it has the movie or episode: one copy plays, several
-    /// open Versions. A tap while the lookup still runs waits for it.
+    /// open Versions. A tap while the lookups (library, presets) still run waits for them.
     func play(_ episode: Episode?, from start: StartPoint?) {
-        guard libraryVersions == nil, let lookup = libraryLookup else {
+        let presets = QualityPresetStore.shared
+        guard let lookup = libraryLookup, libraryVersions == nil || presets.isLoading(target) else {
             return playOrAsk(episode, from: start, library: libraryVersions)
         }
-        Task { playOrAsk(episode, from: start, library: await lookup.value) }
+        Task {
+            let library = await lookup.value
+            if library != nil { await presets.awaitLoad(target) }
+            playOrAsk(episode, from: start, library: library)
+        }
     }
 
-    private func playOrAsk(_ episode: Episode?, from start: StartPoint?, library: LibraryVersions?) {
+    private func playOrAsk(_ episode: Episode?, from start: StartPoint?, library found: LibraryVersions?) {
+        // None once another preset is picked for the title (the server decides the same).
+        let library = found?.allowed(by: QualityPresetStore.shared.libraryRule(for: target))
         let copies = target.isMovie || episode != nil
             ? library?.versions(season: episode?.seasonNumber, episode: episode?.episodeNumber) ?? [] : []
         if copies.count > 1 {
@@ -276,6 +296,7 @@ final class MobileDetailsModel: ObservableObject {
             try? await Task.sleep(for: .milliseconds(400))
             var request = request(episode, from: start)
             request.library = nil
+            request.noLibraryCopy = true
             playback.play(request, picks: prequeuePick)
         }
     }

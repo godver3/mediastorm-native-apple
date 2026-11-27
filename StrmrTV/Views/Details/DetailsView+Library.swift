@@ -48,17 +48,37 @@ extension DetailsView {
         libraryVersions(for: target.isMovie ? nil : primaryEpisode)
     }
 
-    /// Play, through the library when it has the movie or episode: one copy plays, several
-    /// open the list to pick from. A press while the lookup is still running waits for it, so a
-    /// library title never starts a search by mistake.
-    func playPreferringLibrary(_ episode: Episode?, from start: StartPoint?) {
-        guard libraryVersions == nil, let lookup = libraryLookup else {
-            return playOrAsk(episode, from: start, library: libraryVersions)
-        }
-        Task { playOrAsk(episode, from: start, library: await lookup.value) }
+    /// The copies Play may take: none once another quality preset is picked for the title (the
+    /// server decides the same for every other client). Versions still lists them all.
+    var playableLibrary: LibraryVersions? {
+        libraryVersions?.allowed(by: qualityPresets.libraryRule(for: target))
     }
 
-    private func playOrAsk(_ episode: Episode?, from start: StartPoint?, library: LibraryVersions?) {
+    /// `libraryVersions(for:)` of the copies Play may take.
+    func playableVersions(for episode: Episode?) -> [LibraryVersion] {
+        guard let playableLibrary else { return [] }
+        guard let episode else { return target.isMovie ? playableLibrary.movie : [] }
+        return playableLibrary.versions(season: episode.seasonNumber, episode: episode.episodeNumber)
+    }
+
+    /// Play, through the library when it has the movie or episode: one copy plays, several
+    /// open the list to pick from. A press while the lookups (library, presets) are still
+    /// running waits for them, so a library title never starts a search by mistake, nor plays
+    /// its copy when another preset is picked for it.
+    func playPreferringLibrary(_ episode: Episode?, from start: StartPoint?) {
+        let target = target
+        guard let lookup = libraryLookup, libraryVersions == nil || qualityPresets.isLoading(target) else {
+            return playOrAsk(episode, from: start, library: libraryVersions)
+        }
+        Task {
+            let library = await lookup.value
+            if library != nil { await QualityPresetStore.shared.awaitLoad(target) }
+            playOrAsk(episode, from: start, library: library)
+        }
+    }
+
+    private func playOrAsk(_ episode: Episode?, from start: StartPoint?, library found: LibraryVersions?) {
+        let library = found?.allowed(by: qualityPresets.libraryRule(for: target))
         let copies = target.isMovie || episode != nil
             ? library?.versions(season: episode?.seasonNumber, episode: episode?.episodeNumber) ?? [] : []
         if copies.count > 1 {
@@ -77,22 +97,24 @@ extension DetailsView {
             try? await Task.sleep(for: .milliseconds(400))
             var request = request(episode, from: start)
             request.library = nil
+            request.noLibraryCopy = true
             playback.play(request, picks: prequeuePick)
         }
     }
 
-    /// Icon-only like Choose Source. Focused, its caption names the copies.
+    /// Icon-only like Choose Source. Focused, its caption names the copy Play uses (or that Play
+    /// streams, with another quality preset picked).
     @ViewBuilder
     var versionsButton: some View {
         let versions = primaryVersions
-        if let best = versions.first {
+        if !versions.isEmpty {
+            let best = playableVersions(for: target.isMovie ? nil : primaryEpisode).first
+            let copy = best.map { "\($0.source.label) · \($0.quality)" } ?? String(localized: "Play streams")
             Button { versionsPicker = VersionsTarget(episode: target.isMovie ? nil : primaryEpisode) } label: {
                 Label("Versions", systemImage: "externaldrive").labelStyle(.iconOnly)
             }
             .focused($focus, equals: .action(.versions))
-            .focusCaption(versions.count == 1
-                              ? "\(best.source.label) · \(best.quality)"
-                              : String(localized: "\(versions.count) versions · \(best.source.label) · \(best.quality)"),
+            .focusCaption(versions.count == 1 ? copy : String(localized: "\(versions.count) versions · \(copy)"),
                           shown: focus == .action(.versions))
         }
     }
@@ -122,7 +144,7 @@ extension DetailsView {
         LibraryVersionsPresentation(
             title: target, backdropURL: title?.backdrop?.url ?? target.backdropURL,
             picker: $versionsPicker, pending: $pendingVersion,
-            versions: { libraryVersions(for: $0) },
+            versions: { $0.play == nil ? libraryVersions(for: $0.episode) : playableVersions(for: $0.episode) },
             onPick: { pickVersion($0, episode: $1.episode, play: $1.play) },
             onStream: { streamInstead($0.episode, from: $0.play?.start) },
             onPlay: { pending, start in playVersion(pending.version, episode: pending.episode, from: start) })
@@ -135,7 +157,8 @@ struct LibraryVersionsPresentation: ViewModifier {
     let backdropURL: String?
     @Binding var picker: DetailsView.VersionsTarget?
     @Binding var pending: DetailsView.PendingVersion?
-    let versions: (Episode?) -> [LibraryVersion]
+    /// Versions lists every copy; the list Play opened only those Play may take.
+    let versions: (DetailsView.VersionsTarget) -> [LibraryVersion]
     let onPick: (LibraryVersion, DetailsView.VersionsTarget) -> Void
     let onStream: (DetailsView.VersionsTarget) -> Void
     let onPlay: (DetailsView.PendingVersion, StartPoint?) -> Void
@@ -144,7 +167,7 @@ struct LibraryVersionsPresentation: ViewModifier {
         content
             .fullScreenCover(item: $picker) { picker in
                 LibraryVersionsView(heading: picker.episode.map { "\(title.name) · \($0.code)" } ?? title.name,
-                                    versions: versions(picker.episode), backdropURL: backdropURL,
+                                    versions: versions(picker), backdropURL: backdropURL,
                                     onStream: picker.play == nil ? nil : { onStream(picker) }) { version in
                     onPick(version, picker)
                 }

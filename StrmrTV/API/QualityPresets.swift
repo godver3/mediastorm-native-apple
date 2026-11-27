@@ -25,6 +25,9 @@ struct QualityPresetSelection: Decodable, Hashable, Sendable {
 struct QualityPresetChoices: Decodable, Hashable, Sendable {
     /// The ID the server uses for its simple ranking (no preset).
     static let simple = "simple"
+    /// "Library copy": the server offers it first when the profile's libraries have the title,
+    /// and Play takes the copy while it is the title's choice.
+    static let library = "local"
 
     var offered: [QualityPreset]
     /// What Play uses now for the title on this device (its remembered preset, else the default).
@@ -33,16 +36,21 @@ struct QualityPresetChoices: Decodable, Hashable, Sendable {
     /// What it would use without a remembered preset: picking it clears the title's memory.
     var movieDefault: QualityPresetSelection
     var seriesDefault: QualityPresetSelection
+    /// The server's "Prefer library copies" switch; false: Play streams instead of taking a
+    /// copy from the server's own libraries (nil from servers without it).
+    var preferLibraryCopies: Bool?
 
-    enum CodingKeys: String, CodingKey { case offered, movie, series, movieDefault, seriesDefault }
+    enum CodingKeys: String, CodingKey { case offered, movie, series, movieDefault, seriesDefault, preferLibraryCopies }
 
     init(offered: [QualityPreset], movie: QualityPresetSelection = .init(), series: QualityPresetSelection = .init(),
-         movieDefault: QualityPresetSelection? = nil, seriesDefault: QualityPresetSelection? = nil) {
+         movieDefault: QualityPresetSelection? = nil, seriesDefault: QualityPresetSelection? = nil,
+         preferLibraryCopies: Bool? = nil) {
         self.offered = offered
         self.movie = movie
         self.series = series
         self.movieDefault = movieDefault ?? movie
         self.seriesDefault = seriesDefault ?? series
+        self.preferLibraryCopies = preferLibraryCopies
     }
 
     init(from decoder: Decoder) throws {
@@ -52,6 +60,7 @@ struct QualityPresetChoices: Decodable, Hashable, Sendable {
         series = try c.decodeIfPresent(QualityPresetSelection.self, forKey: .series) ?? .init()
         movieDefault = try c.decodeIfPresent(QualityPresetSelection.self, forKey: .movieDefault) ?? movie
         seriesDefault = try c.decodeIfPresent(QualityPresetSelection.self, forKey: .seriesDefault) ?? series
+        preferLibraryCopies = try c.decodeIfPresent(Bool.self, forKey: .preferLibraryCopies)
     }
 
     /// The presets offered for a movie or a series, in the server's order.
@@ -80,6 +89,25 @@ struct QualityPresetChoices: Decodable, Hashable, Sendable {
     }
 }
 
+/// Which library copies Play takes, as the server decides for every other client.
+enum LibraryCopyRule: Sendable {
+    /// All of them: "Library copy" picked or the title's choice (and without presets, as before).
+    case all
+    /// Only Plex and Jellyfin copies: the server prefers streams over its own libraries' files.
+    case remoteOnly
+    /// None: another preset is picked for the title, so Play streams.
+    case stream
+
+    static func of(_ choices: QualityPresetChoices?, isMovie: Bool, picked: String?) -> LibraryCopyRule {
+        guard let c = choices else { return .all }
+        if c.preferLibraryCopies == false { return .remoteOnly }
+        // Without a local copy the choice is not offered: picks are about ranking.
+        guard c.offered(isMovie: isMovie).contains(where: { $0.id == QualityPresetChoices.library }) else { return .all }
+        if let picked { return picked == QualityPresetChoices.library ? .all : .stream }
+        return c.current(isMovie: isMovie).id == QualityPresetChoices.library ? .all : .stream
+    }
+}
+
 extension SourceResult {
     /// The preset's *arr quality ("WEB-2160p") when a preset ranked this result.
     var arrQuality: String? { attributes["arrQuality"].flatMap { $0.isEmpty ? nil : $0 } }
@@ -104,8 +132,9 @@ extension APIClient {
         if let v = title.tmdbID { q["tmdbId"] = v }
         if let v = title.tvdbID { q["tvdbId"] = v }
         if let v = title.year { q["year"] = String(v) }
+        // Kept without offered presets too when it switches library copies off (LibraryCopyRule).
         guard let choices: QualityPresetChoices = try? await send("GET", "/api/quality-presets", query: q),
-              !choices.offered(isMovie: title.isMovie).isEmpty else { return nil }
+              !choices.offered(isMovie: title.isMovie).isEmpty || choices.preferLibraryCopies == false else { return nil }
         return choices
     }
 }

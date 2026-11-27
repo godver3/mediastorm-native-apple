@@ -186,6 +186,6 @@ extension DetailsView {
 
     func request(_ episode: Episode?, from start: StartPoint?) -> PlaybackRequest {
         DetailsRequest.make(target: target, title: title, seasons: seasons, episode: episode,
-                            start: start, seed: artSeed, library: libraryVersions)
+                            start: start, seed: artSeed, library: playableLibrary)
     }
 }
