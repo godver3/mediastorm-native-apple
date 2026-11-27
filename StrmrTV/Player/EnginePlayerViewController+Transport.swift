@@ -13,6 +13,12 @@ extension EnginePlayerViewController {
             self?.setNeedsFocusUpdate()
             self?.updateFocusIfNeeded()
         }
+        // The Stream tab: AVKit's custom info tab, now a tab of the HUD's panel.
+        if streamInfoTab.parent == nil {
+            addChild(streamInfoTab)
+            hud.setStreamView(streamInfoTab.view)
+            streamInfoTab.didMove(toParent: self)
+        }
         Self.fill(hud, in: view)
         if let cover, cover.superview === view {
             view.insertSubview(hud, belowSubview: cover)
@@ -21,9 +27,9 @@ extension EnginePlayerViewController {
         }
     }
 
-    /// Up / Down, as AVKit's bar: Up closes the Info card, else focuses the row (bar up), else
-    /// shows the bar; Down leaves the row, else opens or closes the Info card. False for any
-    /// other press.
+    /// Up / Down, as AVKit's bar: Up closes the Info panel, else focuses the row (bar up), else
+    /// shows the bar; Down leaves the row, else opens or closes the panel. Left / Right while the
+    /// panel is open switch its tab (Info, Stream). False for any other press.
     func handleTransportNavigation(_ type: UIPress.PressType) -> Bool {
         guard let hud = transportHUD else { return false }
         switch type {
@@ -42,6 +48,10 @@ extension EnginePlayerViewController {
             } else {
                 hud.setInfo(visible: !hud.isInfoShowing)
             }
+        case .leftArrow, .rightArrow:
+            guard hud.isInfoShowing, !hud.rowFocused else { return false }
+            _ = hud.stepInfoTab(forward: type == .rightArrow)
+            hud.flash()
         default:
             return false
         }

@@ -144,10 +144,10 @@ extension LivePlayerViewController {
             guard !hud.rowFocused, !hud.isActionFocused else { return true }
             if scrub.target != nil { commitScrub() } else if hud.isShowing, pausable { engine.togglePlayPause() }
         case .leftArrow, .rightArrow:
-            guard !hud.rowFocused else { return true }
+            // With the Info panel open they switch its tab.
+            guard !hud.rowFocused, !handleTransportNavigation(press) else { return true }
             // No catch-up: the timeshift keys seek (`handleTimeshiftPress`).
             guard hasCatchupBar else { return false }
-            if hud.isInfoShowing { hud.setInfo(visible: false) }
             step(forward: press == .rightArrow)
         case .upArrow, .downArrow:
             return handleTransportNavigation(press)

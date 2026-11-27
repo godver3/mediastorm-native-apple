@@ -110,6 +110,7 @@ final class TransportInfoCard: UIView {
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
     private let detailsLabel = UILabel()
+    private let descriptionLabel = UILabel()
 
     init(title: String, subtitle: String?) {
         super.init(frame: .zero)
@@ -137,8 +138,12 @@ final class TransportInfoCard: UIView {
         detailsLabel.isHidden = true
         detailsLabel.font = .systemFont(ofSize: 25, weight: .medium)
         detailsLabel.textColor = .white.withAlphaComponent(0.55)
+        descriptionLabel.isHidden = true
+        descriptionLabel.font = .systemFont(ofSize: 25, weight: .regular)
+        descriptionLabel.textColor = .white.withAlphaComponent(0.8)
+        descriptionLabel.numberOfLines = 4
 
-        let titles = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel, detailsLabel])
+        let titles = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel, descriptionLabel, detailsLabel])
         titles.axis = .vertical
         titles.spacing = 8
         titles.setCustomSpacing(16, after: subtitleLabel)
@@ -174,5 +179,11 @@ final class TransportInfoCard: UIView {
     func setDetails(_ text: String?) {
         detailsLabel.text = text
         detailsLabel.isHidden = text?.isEmpty ?? true
+    }
+
+    /// The programme or episode description, as AVKit's Info tab shows it.
+    func setDescription(_ text: String?) {
+        descriptionLabel.text = text
+        descriptionLabel.isHidden = text?.isEmpty ?? true
     }
 }

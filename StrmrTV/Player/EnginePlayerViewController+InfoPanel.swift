@@ -12,6 +12,7 @@ extension EnginePlayerViewController {
     func setInfoPanel(title: String, subtitle: String?, description: String?, artworkURL: URL? = nil) {
         let items = Self.infoPanelItems(title: title, subtitle: subtitle, description: description)
         engine.setExternalMetadata(items)
+        transportHUD?.setDescription(description)
         infoArtworkTask?.cancel()
         guard let artworkURL else { return }
         infoArtworkTask = Task { [weak self] in

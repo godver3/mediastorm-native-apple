@@ -159,8 +159,7 @@ final class CatchupPlayerViewController: EnginePlayerViewController {
             guard !hud.rowFocused else { return } // a focused row button takes Select itself
             engine.togglePlayPause()
         case .leftArrow, .rightArrow:
-            guard !hud.rowFocused else { return }
-            if hud.isInfoShowing { hud.setInfo(visible: false) }
+            guard !hud.rowFocused, !handleTransportNavigation(press.type) else { return }
             seek(by: press.type == .leftArrow ? -Self.seekStep : Self.seekStep)
         case .upArrow, .downArrow:
             _ = handleTransportNavigation(press.type)

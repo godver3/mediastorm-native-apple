@@ -8,7 +8,8 @@ import UIKit
 extension EnginePlayerViewController {
     func installStreamInfo(file: String?, source: String?) {
         streamInfoBase = StreamInfo(file: file, source: source)
-        customInfoViewControllers = [streamInfoTab]
+        // AVKit's Info panel gets the tab where its bar is in use; the app's HUD hosts it otherwise.
+        if !ownsTransport { customInfoViewControllers = [streamInfoTab] }
         refreshStreamInfo()
         let changes: [AnyPublisher<Void, Never>] = [
             engine.$sourceVideoWidth.map { _ in () }.eraseToAnyPublisher(),

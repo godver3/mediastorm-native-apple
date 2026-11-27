@@ -21,7 +21,7 @@ final class SoftwareTransportHUD: UIView {
     private let pauseGlyph = UIImageView(image: UIImage(systemName: "pause.circle"))
     private let remainingLabel = UILabel()
     private let buttonRow = UIStackView()
-    private let info: TransportInfoCard
+    private let info: TransportInfoPanel
     private var actionButton: TransportActionButton?
     private let preview = ScrubPreviewView()
     /// The time of day, top right; fades with the bar (Settings › Appearance › Show Clock).
@@ -52,7 +52,7 @@ final class SoftwareTransportHUD: UIView {
     private static let barBottom: CGFloat = 170
 
     init(title: String, subtitle: String? = nil) {
-        info = TransportInfoCard(title: title, subtitle: subtitle)
+        info = TransportInfoPanel(title: title, subtitle: subtitle)
         super.init(frame: .zero)
         scrim.colors = [UIColor.clear.cgColor, UIColor.black.withAlphaComponent(0.65).cgColor]
         scrim.locations = [0.45, 1]
@@ -192,9 +192,21 @@ final class SoftwareTransportHUD: UIView {
 
     func setDetails(_ text: String?) { info.setDetails(text) }
 
-    /// Down on the bar: the Info card, as AVKit's Info tab. Up, Down or Menu closes it.
+    func setDescription(_ text: String?) { info.setDescription(text) }
+
+    /// The Stream tab's rows (`StreamInfoViewController`'s view).
+    func setStreamView(_ view: UIView) { info.setStreamView(view) }
+
+    /// Left / Right with the panel open: the other tab. True when it moved.
+    func stepInfoTab(forward: Bool) -> Bool { info.step(forward: forward) }
+
+    /// Down on the bar: the Info / Stream panel, as AVKit's, opening on Info. Up, Down or Menu
+    /// closes it.
     func setInfo(visible: Bool) {
-        if visible { releaseRow() }
+        if visible {
+            releaseRow()
+            if !isInfoShowing { info.select(.info) }
+        }
         UIView.animate(withDuration: 0.25) {
             self.info.alpha = visible ? 1 : 0
             self.buttonRow.alpha = visible ? 0 : 1

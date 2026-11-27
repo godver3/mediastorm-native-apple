@@ -18,8 +18,7 @@ extension PlayerViewController {
             guard !hud.rowFocused, !hud.isActionFocused else { return true }
             engine.togglePlayPause()
         case .leftArrow, .rightArrow:
-            guard !hud.rowFocused else { return true }
-            if hud.isInfoShowing { hud.setInfo(visible: false) }
+            guard !hud.rowFocused, !handleTransportNavigation(press.type) else { return true }
             scrub(by: press.type == .leftArrow ? -Self.scrubStep : Self.scrubStep)
         case .upArrow, .downArrow:
             return handleTransportNavigation(press.type)
