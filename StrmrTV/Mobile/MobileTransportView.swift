@@ -202,6 +202,9 @@ final class MobileTransportView: UIView {
     }
 
     @objc private func scrubMoved() {
+        // UISlider can send a last valueChanged after the touch ends; acting on it re-showed the
+        // preview and left the transport stuck scrubbing (clock frozen, menu row hidden).
+        guard slider.isTracking else { return }
         isScrubbing = true
         if let scrubLimit, Double(slider.value) > scrubLimit { slider.value = Float(max(0, scrubLimit)) }
         let time = Double(slider.value)
