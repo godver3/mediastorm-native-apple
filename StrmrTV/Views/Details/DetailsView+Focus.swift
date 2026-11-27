@@ -13,6 +13,9 @@ extension DetailsView {
         var episode: [Int: String] = [:]
         /// The card last focused in each related row.
         var related: [RelatedRow: String] = [:]
+        /// The action button last focused, restored when focus comes back from a cover
+        /// (the player) instead of landing on the overview.
+        var action: DetailsFocus?
     }
 
     // MARK: Row focus
@@ -50,12 +53,19 @@ extension DetailsView {
         guard let new else { return }
         focusInHeader = Self.isHeader(new.row)
         guard old != .immersive else { return }
+        // Focus returning from a cover (old == nil) lands on the first focusable, the
+        // overview; it is only meant to be reached by Up from the actions.
+        if old == nil, new == .overview {
+            focus = focusMemory.action ?? .action(.primary)
+            return
+        }
         if let old, old.row != new.row, let target = entry(new.row), target != new {
             focus = target
             return
         }
         switch new {
-        case .overview, .action, .immersive: break
+        case .action: focusMemory.action = new
+        case .overview, .immersive: break
         case .season(let number): focusMemory.seasonChip = number
         case .episode(let id):
             if let season = currentSeason?.number { focusMemory.episode[season] = id }
