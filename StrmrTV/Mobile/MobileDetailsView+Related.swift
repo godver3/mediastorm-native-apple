@@ -61,12 +61,12 @@ extension MobileDetailsView {
                 ForEach(model.collectionMovies) { MobilePosterTile(title: $0, opens: !model.isKids) }
             }
         }
-        if !model.similar.isEmpty {
+        if !model.similar.isEmpty, !model.isKids {
             relatedRow(String(localized: "More Like This")) {
                 ForEach(model.similar.prefix(20)) { MobilePosterTile(title: $0, opens: !model.isKids) }
             }
         }
-        if !model.cast.isEmpty {
+        if !model.cast.isEmpty, !model.isKids {
             relatedRow(String(localized: "Cast")) {
                 ForEach(model.cast, id: \.id) { MobileCastTile(member: $0, opens: !model.isKids) }
             }

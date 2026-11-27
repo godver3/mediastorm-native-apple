@@ -99,12 +99,12 @@ extension DetailsView {
                     ForEach(collectionMovies) { posterCard($0, in: .collection) }
                 }
             }
-            if !similar.isEmpty {
+            if !similar.isEmpty, !isKids {
                 relatedRow(String(localized: "More Like This"), .similar) {
                     ForEach(similar.prefix(20)) { posterCard($0, in: .similar) }
                 }
             }
-            if !cast.isEmpty {
+            if !cast.isEmpty, !isKids {
                 relatedRow(String(localized: "Cast"), .cast) {
                     ForEach(cast, id: \.id) { member in
                         CastCard(member: member, opens: !isKids)
