@@ -266,12 +266,13 @@ final class MobileDetailsModel: ObservableObject {
     /// open Versions. A tap while the lookups (library, presets) still run waits for them.
     func play(_ episode: Episode?, from start: StartPoint?) {
         let presets = QualityPresetStore.shared
-        guard let lookup = libraryLookup, libraryVersions == nil || presets.isLoading(target) else {
-            return playOrAsk(episode, from: start, library: libraryVersions)
+        guard let lookup = libraryLookup else { return playOrAsk(episode, from: start, library: libraryVersions) }
+        if let library = libraryVersions, presets.isLoaded(target, episode: episode) {
+            return playOrAsk(episode, from: start, library: library)
         }
         Task {
             let library = await lookup.value
-            if library != nil { await presets.awaitLoad(target) }
+            if library != nil { await presets.ensureLoaded(target, episode: episode) }
             playOrAsk(episode, from: start, library: library)
         }
     }

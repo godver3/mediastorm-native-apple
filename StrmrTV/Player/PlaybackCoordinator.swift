@@ -24,8 +24,8 @@ final class PlaybackCoordinator: ObservableObject {
     private var resolveTask: Task<Void, Never>?
     /// Identifies the current resolve, so a cancelled one can't clear its successor.
     private var resolveID = UUID()
-    private var previewSetting: (enabled: Bool, fetched: Date)?
-    private var settings: (value: APIClient.PlaybackSettings, profile: String, fetched: Date)?
+    var previewSetting: (enabled: Bool, fetched: Date)?
+    var settings: (value: APIClient.PlaybackSettings, profile: String, fetched: Date)?
     /// A prequeue started ahead of time for the episode that plays next, keyed by
     /// `PlaybackRequest.prequeueKey`; `resolveStream` picks it up instead of starting over.
     private var prefetched: (key: String, prequeueID: String)?
@@ -48,7 +48,7 @@ final class PlaybackCoordinator: ObservableObject {
         }
     }()
 
-    private let api = APIClient.shared
+    let api = APIClient.shared
 
     /// The one engine, for the live player.
     var sharedEngine: AetherEngine? { engine }
@@ -147,43 +147,6 @@ final class PlaybackCoordinator: ObservableObject {
         resolvingDetail = nil
     }
 
-    /// The admin's preview-thumbnail switch, re-read at most every five minutes.
-    private func previewThumbnailsEnabled() async -> Bool {
-        if let previewSetting, Date().timeIntervalSince(previewSetting.fetched) < 300 { return previewSetting.enabled }
-        let enabled = await api.previewThumbnailsEnabled()
-        previewSetting = (enabled, Date())
-        return enabled
-    }
-
-    /// The profile's credits auto-skip, and the server's on-device credits detection switch.
-    func creditsSettings() async -> (autoSkip: Bool, detection: Bool) {
-        let settings = await playbackSettings()
-        return (settings.creditsAutoSkip, settings.creditsDetectionEnabled)
-    }
-
-    /// The profile's commercial auto-skip, for recordings.
-    func commercialAutoSkip() async -> Bool {
-        await playbackSettings().commercialAutoSkip
-    }
-
-    /// The profile's playback settings, re-read at most every five minutes (or on a profile switch).
-    private func playbackSettings() async -> APIClient.PlaybackSettings {
-        let profile = api.profileID
-        if let settings, settings.profile == profile,
-           Date().timeIntervalSince(settings.fetched) < 300 { return settings.value }
-        let value = await api.playbackSettings()
-        settings = (value, profile, Date())
-        SubtitleStyleStore.shared.adopt(value.subtitleStyle)
-        return value
-    }
-
-    /// Reads the server's subtitle style now, so Settings shows the current one (playback
-    /// reads it with the rest of the profile's settings).
-    func refreshSubtitleStyle() async {
-        settings = nil
-        _ = await playbackSettings()
-    }
-
     /// Starts resolving `request` on the server ahead of time (the player calls this near the
     /// end of an episode), so the next episode starts quickly. Failures are left for `play`.
     func prefetch(_ request: PlaybackRequest) {
@@ -257,29 +220,6 @@ final class PlaybackCoordinator: ObservableObject {
     private func settleWarm(_ titleID: String, _ profile: String, _ phase: WarmPrequeue.Phase, _ generation: Int) {
         guard warmGeneration == generation, warm?.titleID == titleID, warm?.profile == profile, case .resolving = warm?.phase else { return }
         warm?.phase = phase
-    }
-
-    /// The full-screen player is up (nothing SwiftUI can present over it).
-    var isPresentingPlayer: Bool {
-        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-        var vc = scene?.windows.first(where: \.isKeyWindow)?.rootViewController
-        while let current = vc {
-            if current is PlayerViewController { return true }
-            vc = current.presentedViewController
-        }
-        return false
-    }
-
-    /// A stream is resolving or a player (VOD or live) is up: no background speed tests.
-    var isBusy: Bool {
-        resolving != nil || Self.topViewController().map { top in
-            var vc: UIViewController? = top
-            while let current = vc {
-                if current is EnginePlayerViewController { return true }
-                vc = current.presentingViewController
-            }
-            return false
-        } ?? false
     }
 
     func playerDidClose() {
@@ -431,7 +371,7 @@ final class PlaybackCoordinator: ObservableObject {
         presenter.present(player, animated: true, completion: completion)
     }
 
-    private static func topViewController() -> UIViewController? {
+    static func topViewController() -> UIViewController? {
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
         var top = scene?.windows.first(where: \.isKeyWindow)?.rootViewController
         while let presented = top?.presentedViewController { top = presented }

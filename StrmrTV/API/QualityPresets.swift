@@ -125,13 +125,20 @@ extension SourceResult {
 extension APIClient {
     /// The quality presets offered for `title` on this profile and device, or nil when the
     /// server has none to offer for it (no presets, an older server, or an error).
-    func qualityPresets(for title: DetailsTarget) async -> QualityPresetChoices? {
+    /// `episode`, for a series, names the episode about to play: "Library copy" is offered only
+    /// when the libraries have that one (without it, any episode of the series counts).
+    func qualityPresets(for title: DetailsTarget, episode: Episode? = nil) async -> QualityPresetChoices? {
         var q = ["userId": profileID, "clientId": Config.clientID, "mediaType": title.isMovie ? "movie" : "series",
                  "titleId": title.titleID, "name": title.name]
         if let v = title.imdbID { q["imdbId"] = v }
         if let v = title.tmdbID { q["tmdbId"] = v }
         if let v = title.tvdbID { q["tvdbId"] = v }
         if let v = title.year { q["year"] = String(v) }
+        if !title.isMovie, let episode {
+            q["season"] = String(episode.seasonNumber)
+            q["episode"] = String(episode.episodeNumber)
+            if let v = episode.absoluteEpisodeNumber { q["absolute"] = String(v) }
+        }
         // Kept without offered presets too when it switches library copies off (LibraryCopyRule).
         guard let choices: QualityPresetChoices = try? await send("GET", "/api/quality-presets", query: q),
               !choices.offered(isMovie: title.isMovie).isEmpty || choices.preferLibraryCopies == false else { return nil }

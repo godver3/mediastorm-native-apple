@@ -16,20 +16,59 @@ final class QualityPresetStore: ObservableObject {
 
     private func key(_ titleID: String, profile: String) -> String { profile + "|" + titleID }
 
-    /// Loads the offered presets for `title` (nil hides the Quality action).
-    func load(_ title: DetailsTarget) async {
-        let profile = APIClient.shared.profileID
-        let k = key(title.titleID, profile: profile)
-        let task = Task { await APIClient.shared.qualityPresets(for: title) }
+    /// The episode ("" for none) each title's choices were loaded for, and is loading for: the
+    /// server offers "Library copy" only when the libraries have that episode.
+    private var loadedFor: [String: String] = [:]
+    private var loadingFor: [String: String] = [:]
+
+    private func episodeKey(_ episode: Episode?) -> String {
+        episode.map { "\($0.seasonNumber)x\($0.episodeNumber)" } ?? ""
+    }
+
+    /// Loads the offered presets for `title`, for `episode` when one is about to play (nil
+    /// hides the Quality action).
+    func load(_ title: DetailsTarget, episode: Episode? = nil) async {
+        await start(title, episode: episode).value
+    }
+
+    /// Registers the load synchronously, so Play can never see it as not started.
+    @discardableResult
+    private func start(_ title: DetailsTarget, episode: Episode?) -> Task<Void, Never> {
+        let k = key(title.titleID, profile: APIClient.shared.profileID)
+        let ek = episodeKey(episode)
+        let task = Task { await APIClient.shared.qualityPresets(for: title, episode: episode) }
         loading[k] = task
-        let loaded = await task.value
-        if let loaded { choices[k] = loaded } else { choices[k] = nil }
-        if loading[k] == task { loading[k] = nil }
+        loadingFor[k] = ek
+        return Task { [weak self] in
+            let loaded = await task.value
+            guard let self, loading[k] == task else { return } // a newer load replaced it
+            choices[k] = loaded
+            loadedFor[k] = ek
+            loading[k] = nil
+            loadingFor[k] = nil
+        }
     }
 
     /// Whether `title`'s presets are still loading.
     func isLoading(_ title: DetailsTarget) -> Bool {
         loading[key(title.titleID, profile: APIClient.shared.profileID)] != nil
+    }
+
+    /// Whether `title`'s presets are loaded, for `episode`, with no newer load running: Play
+    /// can decide on a library copy without waiting.
+    func isLoaded(_ title: DetailsTarget, episode: Episode?) -> Bool {
+        let k = key(title.titleID, profile: APIClient.shared.profileID)
+        return loading[k] == nil && loadedFor[k] == episodeKey(episode)
+    }
+
+    /// Loads `title`'s presets for `episode` unless they are loaded or loading for it, then
+    /// waits for them (`awaitLoad`). A page whose load has not started yet counts as loading.
+    func ensureLoaded(_ title: DetailsTarget, episode: Episode?) async {
+        let k = key(title.titleID, profile: APIClient.shared.profileID)
+        let ek = episodeKey(episode)
+        let current = loading[k] != nil ? loadingFor[k] : loadedFor[k]
+        if current != ek { start(title, episode: episode) }
+        await awaitLoad(title)
     }
 
     /// Waits, up to `timeout`, for `title`'s presets to load (they say whether Play takes a

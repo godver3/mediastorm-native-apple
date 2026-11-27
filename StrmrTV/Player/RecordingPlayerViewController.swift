@@ -45,7 +45,7 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
     lazy var mobileChromeTracker = MobileChromeVisibility(root: view, controls: mobileControls)
     override var hasTouchTransport: Bool { true }
     #else
-    private lazy var softwareHUD = SoftwareTransportHUD(title: recording.displayTitle, subtitle: recording.channelName)
+    lazy var softwareHUD = SoftwareTransportHUD(title: recording.displayTitle, subtitle: recording.channelName)
     private lazy var recBadge = RecordingBadge()
     #endif
 
@@ -63,18 +63,8 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
     var scrubTarget: Double?
     private var scrubCommit: DispatchWorkItem?
 
-    // Commercial breaks.
-    private var commercials: [SkipSegment] = []
-    private var commercialsRequested = false
-    private var commercialAutoSkip = false
-    /// The break Skip Commercial is offered for.
-    private var activeCommercial: SkipSegment?
-    /// Menu over the button: not offered again for this break.
-    private var dismissedCommercial: SkipSegment?
-    /// Breaks jumped over by themselves: once each, so seeking back into one plays it.
-    private var autoSkippedCommercials = Set<SkipSegment>()
-    /// The break a skip is seeking past: no button for it until playback has left it.
-    private var skippingCommercial: SkipSegment?
+    /// Commercial breaks (`RecordingPlayer+Commercials`).
+    let commercialBreaks = CommercialBreaks()
 
     /// Shown while the server still follows the recording.
     static let recBadgeText = String(localized: "● REC")
@@ -194,101 +184,6 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
         guard let id = sessionID else { return }
         sessionID = nil
         Task { await APIClient.shared.stopLiveSession(id) }
-    }
-
-    // MARK: Commercial breaks
-
-    /// Asks the server for the breaks once (`POST /api/video/segments` with the recording's ID).
-    /// A growing recording has none yet: the server marks them once it is done.
-    private func loadCommercials() {
-        guard !growing, !commercialsRequested else { return }
-        commercialsRequested = true
-        var body: [String: Any] = ["recordingId": recording.id]
-        if engine.duration > 0 { body["duration"] = engine.duration }
-        Task { [weak self] in
-            // A failed request is tried twice more.
-            var found: [SkipSegment] = []
-            for attempt in 0..<3 {
-                if attempt > 0 { try? await Task.sleep(for: .seconds(10)) }
-                guard self?.didFinish == false else { return }
-                if let answer = try? await APIClient.shared.skipSegments(body) {
-                    found = answer
-                    break
-                }
-            }
-            let skip = found.contains { $0.type == "commercial" } ? await PlaybackCoordinator.shared.commercialAutoSkip() : false
-            guard let self, !didFinish else { return }
-            commercials = found.filter { $0.type == "commercial" && $0.end > $0.start }.sorted { $0.start < $1.start }
-            commercialAutoSkip = skip
-            if !commercials.isEmpty {
-                log.info("\(self.commercials.count) commercial breaks, auto-skip \(skip)")
-            }
-        }
-    }
-
-    /// Inside a break: jump over it (auto-skip, once per break) or offer Skip Commercial.
-    private func updateCommercial(at time: Double) {
-        guard !commercials.isEmpty, scrubTarget == nil else { return }
-        let found = commercials.first { time >= $0.start && time < $0.end - 1 }
-        if let skipping = skippingCommercial {
-            if found == skipping { return } // the seek past it has not landed yet
-            skippingCommercial = nil
-        }
-        if let found, commercialAutoSkip, autoSkippedCommercials.insert(found).inserted {
-            log.notice("skipping commercial \(Int(found.start))-\(Int(found.end))s")
-            skipCommercial(found)
-            return
-        }
-        let segment = found == dismissedCommercial ? nil : found
-        guard segment != activeCommercial else { return }
-        activeCommercial = segment
-        setCommercialAction(segment.map { segment in
-            UIAction(title: String(localized: "Skip Commercial"), image: UIImage(systemName: "forward.fill")) { [weak self] _ in
-                self?.skipCommercial(segment)
-            }
-        })
-    }
-
-    private func skipCommercial(_ segment: SkipSegment) {
-        let end = transportDuration > 0 ? min(segment.end, transportDuration) : segment.end
-        activeCommercial = nil
-        skippingCommercial = segment
-        setCommercialAction(nil)
-        Task { await seekPlayback(to: end) }
-    }
-
-    /// The button: AVKit's contextual action, and the phone's controls or the TV's HUD where
-    /// they own the transport.
-    private func setCommercialAction(_ action: UIAction?) {
-        let hadAction = !contextualActions.isEmpty
-        contextualActions = action.map { [$0] } ?? []
-        #if os(iOS)
-        mobileControls.setAction(action)
-        #else
-        softwareHUD.setAction(action)
-        #endif
-        // Removing the button while it holds focus left AVKit with nothing focused; on the TV's
-        // HUD the new button takes focus (preferredFocusEnvironments), so Select presses it,
-        // unless the menu row or the Info card is in use.
-        #if os(tvOS)
-        let takeFocus = action != nil && ownsTransport && !softwareHUD.rowFocused && !softwareHUD.isInfoShowing
-        #else
-        let takeFocus = false
-        #endif
-        if (hadAction && action == nil) || takeFocus {
-            setNeedsFocusUpdate()
-            updateFocusIfNeeded()
-        }
-    }
-
-    /// Menu over Skip Commercial: drop it for this break (AVKit's remote handling stays stuck
-    /// while a contextual action is set).
-    private func dismissCommercialAction() -> Bool {
-        guard let activeCommercial, !contextualActions.isEmpty else { return false }
-        dismissedCommercial = activeCommercial
-        self.activeCommercial = nil
-        setCommercialAction(nil)
-        return true
     }
 
     // MARK: Engine binding
@@ -488,33 +383,3 @@ final class RecordingPlayerViewController: EnginePlayerViewController {
         PlaybackCoordinator.shared.playerDidClose()
     }
 }
-
-#if os(tvOS)
-/// "● REC" at the top right while the server still follows the recording.
-private final class RecordingBadge: UIView {
-    private let label = UILabel()
-
-    init() {
-        super.init(frame: .zero)
-        isUserInteractionEnabled = false
-        label.text = RecordingPlayerViewController.recBadgeText
-        label.font = .systemFont(ofSize: 26, weight: .bold)
-        label.textColor = .white
-        label.backgroundColor = UIColor.systemRed.withAlphaComponent(0.85)
-        label.textAlignment = .center
-        label.layer.cornerRadius = 8
-        label.layer.masksToBounds = true
-        label.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(label)
-        NSLayoutConstraint.activate([
-            label.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 20),
-            label.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -20),
-            label.widthAnchor.constraint(equalToConstant: 120),
-            label.heightAnchor.constraint(equalToConstant: 44),
-        ])
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-}
-#endif

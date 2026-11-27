@@ -61,7 +61,7 @@ extension APIClient {
             subtitleStyle: d?.style.map { $0.merged(over: u?.style) } ?? u?.style,
             autoPlayTrailers: d?.autoPlayTrailersTV ?? u?.autoPlayTrailersTV ?? false,
             creditsDetectionEnabled: d?.creditsDetectionEnabled ?? u?.creditsDetectionEnabled ?? false,
-            commercialAutoSkip: d?.commercialAutoSkip ?? u?.commercialAutoSkip ?? false)
+            commercialAutoSkip: u?.commercialAutoSkip ?? false)
     }
 }
 

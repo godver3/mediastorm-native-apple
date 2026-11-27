@@ -66,13 +66,14 @@ extension DetailsView {
     /// running waits for them, so a library title never starts a search by mistake, nor plays
     /// its copy when another preset is picked for it.
     func playPreferringLibrary(_ episode: Episode?, from start: StartPoint?) {
-        let target = target
-        guard let lookup = libraryLookup, libraryVersions == nil || qualityPresets.isLoading(target) else {
-            return playOrAsk(episode, from: start, library: libraryVersions)
+        let target = target, presets = QualityPresetStore.shared
+        guard let lookup = libraryLookup else { return playOrAsk(episode, from: start, library: libraryVersions) }
+        if let library = libraryVersions, presets.isLoaded(target, episode: episode) {
+            return playOrAsk(episode, from: start, library: library)
         }
         Task {
             let library = await lookup.value
-            if library != nil { await QualityPresetStore.shared.awaitLoad(target) }
+            if library != nil { await presets.ensureLoaded(target, episode: episode) }
             playOrAsk(episode, from: start, library: library)
         }
     }
